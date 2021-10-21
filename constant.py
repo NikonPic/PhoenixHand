@@ -4,9 +4,7 @@ import numpy as np
 import sys
 import signal
 from datetime import datetime
-
 from argmax_gym import TcpRemoteGym
-import matplotlib.pylab as plt
 import json
 
 
@@ -36,12 +34,14 @@ obs, image = env.reset(record=False)
 print('reset')
 
 action_off = np.array([[
+#       1    2    3    4    5    6    7    8   
         1.5, 1.5, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0,
         0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
         #0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 ]])
 
 action_amp = np.array([[
+#       1    2    3     4     5    6    7    8  
         1.5, 1.5, -1.0, -1.0, 0.0, 0.0, 0.0, 0.0,
         0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
         #0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
@@ -59,7 +59,7 @@ json_out = {
 }
 
 
-maxtime_s = 100
+maxtime_s = 10
 millisec = 0
 printcount = 0
 
@@ -71,20 +71,22 @@ while (millisec < (maxtime_s * 1000)):
     action =  5 * action_off +  7 * action_amp * np.cos(t)
     obs, reward, done, image = env.step(action)
 
+    append_obs = obs[0].tolist()
+
     # add to json_out:
     json_out['time'].append(millisec)
     json_out['action'].append(action.tolist())
-    json_out['observation'].append(obs[0].tolist())
+    json_out['observation'].append(append_obs)
 
     printcount += 1
     if printcount > 1000:
         print(millisec)
-        print(type(obs[0]))
-        print(len(obs[0]))
-        print(obs[0])
+        print(type(append_obs))
+        print(len(append_obs))
+        print(len(json_out['observation'][-1]))
         printcount = 0
 
-with open('data.json', 'w') as f:
+with open('latest.json', 'w') as f:
     json.dump(json_out, f, indent=2)
 
 # %%
