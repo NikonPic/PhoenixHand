@@ -3,7 +3,7 @@ import json
 import matplotlib.pyplot as plt
 
 
-with open('./latest.json', encoding='utf-8', errors='ignore') as f:
+with open('./data/data.json', encoding='utf-8', errors='ignore') as f:
     data = json.load(f)
 
 

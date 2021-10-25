@@ -118,7 +118,7 @@ while (millisec < (maxtime_s * 1000)):
 print('finished')
 json_out['observation'] = obs_handler.output_dict
 
-with open('latest.json', 'w') as f:
+with open('data/latest.json', 'w') as f:
     json.dump(json_out, f, indent=2)
 
 # %%
