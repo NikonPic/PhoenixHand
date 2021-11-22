@@ -7,7 +7,7 @@ from datetime import datetime
 from argmax_gym import TcpRemoteGym
 import json
 from datasplit import ObservationHandler
-
+from definitions import action_off, action_amp, action_phase
 
 def millis():
     """return the time since start in milliseconds"""
@@ -40,20 +40,18 @@ print('reset')
 # Motor nummern:
 
 """
-Strecker 1 zeigerfinger: 5
-Strecker 2 zeigerfinger: 4
+ZUWEISUNG
+Strecker 1 zeigerfinger: 4
+Strecker 2 zeigerfinger: 6
 
-Beuger 1 zeigerfinger: 1
-Beuger 2 zeigerfinger: 3
+Beuger 1 zeigerfinger: 3
+Beuger 2 zeigerfinger: 2
 
-Strecker 1 Daumen: 6
-Strecker 2 Daumen: 7
+Strecker 1 Daumen: 7
+Strecker 2 Daumen: 5
 
-Daumen Abspreitzer: 2
-Daumen Beuger: 0
-
-
-
+Daumen Abspreitzer: 0
+Daumen Beuger: 1
 
 Id
 ZF PP : 1007
@@ -62,26 +60,11 @@ ZF DP : 1008
 DAUMEN DP : 1009
 DAUMEN MC : 1010
 
-
+FORCETORQUE: 1011
 """
 
 
-action_off = np.array([[
-    # 0    1    2    3    4    5    6    7
-    1, 0.5, 0.5, 0.5, 0.5, 0.5, 1.0, 1.0,
-    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-    #0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
-]])
-
-action_amp = np.array([[
-    # 0    1    2    3    4    5    6    7
-    1.0, -1.5, 1.0, -1.5, 1.5, 1.5, -0.5, -0.5,
-    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-    #0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
-]])
-
-
-dt = 0.01
+dt = 0.005
 t = 0
 start_time = datetime.now()
 
@@ -91,7 +74,7 @@ json_out = {
 }
 
 
-maxtime_s = 30
+maxtime_s = 60
 millisec = 0
 printcount = 0
 
@@ -100,8 +83,12 @@ while (millisec < (maxtime_s * 1000)):
     millisec = millis()
 
     t += dt
-    action = 5 * action_off + 5 * action_amp * np.cos(t)
+    action = 3 * action_off + 3 * action_amp * np.cos(t - action_phase)
+
+
     obs, reward, done, image = env.step(action)
+
+    # print(action)
 
     append_obs = obs[0].tolist()
 

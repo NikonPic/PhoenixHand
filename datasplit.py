@@ -179,7 +179,8 @@ class RigidBody(Sensor):
 class ObservationHandler(object):
     """Handle the Observation and split data to the Sensors"""
 
-    def __init__(self, num_motors=8, num_analog_sens=8, num_ft_sensors=1, num_rigid_bodies=4):
+    def __init__(self, num_motors=8, num_analog_sens=8, num_ft_sensors=1, num_rigid_bodies=5
+    ):
 
         self.num_motors = num_motors
         self.motors = [

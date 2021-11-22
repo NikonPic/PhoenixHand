@@ -1,4 +1,7 @@
 latest.json
-pin*.json
-*fre*.json
+#pin*.json
+#*fre*.json
+
+data/test_october/*
+
 __pycache__

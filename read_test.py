@@ -49,11 +49,12 @@ class RigidBodyAssignment:
     zf_dp: int
     daumen_dp: int
     daumen_mc: int
+    force_torque: int
 
 
 class TestEvaluator():
 
-    def __init__(self, finger_a: FingerAssignment, body_a: RigidBodyAssignment, name='./data/data.json'):
+    def __init__(self, finger_a: FingerAssignment, body_a: RigidBodyAssignment, name='./data/latest.json'):
 
         # read the json
         with open(name, encoding='utf-8', errors='ignore') as f:
@@ -62,7 +63,7 @@ class TestEvaluator():
         # extract the main vectors
         self.obs = data['observation']
         self.act = data['action']
-        self.time = data['time']
+        self.time = [t / 1000 for t in data['time']]
 
         self.body_a = body_a
         self.finger_a = finger_a
@@ -76,20 +77,45 @@ class TestEvaluator():
                 print(attribute)
                 setattr(self, attribute,
                         self.obs['rigid_bodies'][getattr(self.body_a, attribute)])
+    
+    def plot_rigid_bodies(self, call_name):
+        plt.figure(figsize=(12,12))
+        plt.subplot(2,1,1)
+        rigid_b = getattr(self, call_name)
+        print(rigid_b.keys())
+        plt.plot(self.time, rigid_b['qx'], label='qx')
+        plt.plot(self.time, rigid_b['qy'], label='qy')
+        plt.plot(self.time, rigid_b['qz'], label='qz')
+        plt.plot(self.time, rigid_b['qw'], label='qw')
+        plt.grid()
+        plt.xlabel('time [s]')
+        plt.ylabel('quaternion')
+        plt.legend()
+
+        plt.subplot(2,1,2)
+        plt.plot(self.time, rigid_b['x'], label='x')
+        plt.plot(self.time, rigid_b['y'], label='y')
+        plt.plot(self.time, rigid_b['z'], label='z')
+        plt.grid()
+        plt.legend()
 
 
-finger_a = FingerAssignment(5, 4, 1, 3, 6, 7, 2, 0)
-body_a = RigidBodyAssignment(0, 1, 2, 3)
+finger_a = FingerAssignment(4, 6, 3, 2, 7, 5, 0, 1)
+body_a = RigidBodyAssignment(0, 1, 2, 3, 4)
 test = TestEvaluator(finger_a, body_a)
 
+# %%
+test.plot_rigid_bodies('force_torque')
+# %%
+test.plot_rigid_bodies('zf_pp')
+# %%
+test.plot_rigid_bodies('zf_dp')
+# %%
+test.plot_rigid_bodies('daumen_dp')
+# %%
+test.plot_rigid_bodies('daumen_mc')
 
-# plt.plot(data['time'])
 # %%
-test.daumen_dp
-# %%
-body_a.print_atts()
-# %%
-test.zf_pp
-# %%
-test.obs
+plt.plot(test.obs['analogs'][3]['force'])
+
 # %%
