@@ -54,10 +54,12 @@ class RigidBodyAssignment:
 
 class TestEvaluator():
 
-    def __init__(self, finger_a: FingerAssignment, body_a: RigidBodyAssignment, name='./data/latest.json'):
+    def __init__(self, finger_a: FingerAssignment, body_a: RigidBodyAssignment, name='init_1vs1.json'):
 
         # read the json
-        with open(name, encoding='utf-8', errors='ignore') as f:
+
+        self.name = f'./data/test_november/{name}'
+        with open(self.name, encoding='utf-8', errors='ignore') as f:
             data = json.load(f)
 
         # extract the main vectors
@@ -69,18 +71,19 @@ class TestEvaluator():
         self.finger_a = finger_a
         self.assign_rigid_bodies()
 
-
     def assign_rigid_bodies(self):
+        """assign the rigid bodies acco to the names"""
         for attribute in dir(self.body_a):
-            
+
             if ('_' in attribute[0]) == False:
                 print(attribute)
                 setattr(self, attribute,
                         self.obs['rigid_bodies'][getattr(self.body_a, attribute)])
-    
+
     def plot_rigid_bodies(self, call_name):
-        plt.figure(figsize=(12,12))
-        plt.subplot(2,1,1)
+        """make a simple plot, containing the general quaternion and position data"""
+        plt.figure(figsize=(12, 12))
+        plt.subplot(2, 1, 1)
         rigid_b = getattr(self, call_name)
         print(rigid_b.keys())
         plt.plot(self.time, rigid_b['qx'], label='qx')
@@ -92,7 +95,7 @@ class TestEvaluator():
         plt.ylabel('quaternion')
         plt.legend()
 
-        plt.subplot(2,1,2)
+        plt.subplot(2, 1, 2)
         plt.plot(self.time, rigid_b['x'], label='x')
         plt.plot(self.time, rigid_b['y'], label='y')
         plt.plot(self.time, rigid_b['z'], label='z')
