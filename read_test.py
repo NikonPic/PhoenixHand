@@ -1,4 +1,5 @@
 # %%
+
 import json
 import matplotlib.pyplot as plt
 from dataclasses import dataclass
@@ -105,20 +106,15 @@ class TestEvaluator():
 
 finger_a = FingerAssignment(4, 6, 3, 2, 7, 5, 0, 1)
 body_a = RigidBodyAssignment(0, 1, 2, 3, 4)
-test = TestEvaluator(finger_a, body_a)
+data = TestEvaluator(finger_a, body_a)
 
 # %%
-test.plot_rigid_bodies('force_torque')
-# %%
-test.plot_rigid_bodies('zf_pp')
-# %%
-test.plot_rigid_bodies('zf_dp')
-# %%
-test.plot_rigid_bodies('daumen_dp')
-# %%
-test.plot_rigid_bodies('daumen_mc')
+if __name__ == '__main__':
+    data.plot_rigid_bodies('force_torque')
+    data.plot_rigid_bodies('zf_pp')
+    data.plot_rigid_bodies('zf_dp')
+    data.plot_rigid_bodies('daumen_dp')
+    data.plot_rigid_bodies('daumen_mc')
 
-# %%
-plt.plot(test.obs['analogs'][3]['force'])
 
 # %%

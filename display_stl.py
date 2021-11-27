@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
 import numpy as np
 from stl import mesh
+from pyquaternion import Quaternion
+from read_test import data
 
 
 # %%
@@ -57,9 +59,7 @@ def get_triple_header(loc_mesh: mesh.Mesh, min_dist: float = 15):
 
 
 def get_cog(loc_mesh: mesh.Mesh, as_mean=True):
-    """
-    Returns the center of gravity of the tracker spheres
-    """
+    """Returns the center of gravity of the tracker spheres"""
     if as_mean:
         return np.mean(np.mean(loc_mesh.vectors, axis=0), axis=0)
     else:
@@ -100,17 +100,15 @@ class Tracker(object):
             set([0, 1, 2]) - set([idx_max, idx_min]))[0]]
         self.b_sphere = spheres[idx_min]
 
-        self.cogs = [get_cog(self.r_sphere),
-                     get_cog(self.g_sphere),
-                     get_cog(self.b_sphere)]
-
-        self.define_all_axes()
         self.calclate_center()
+        self.define_all_axes()
+        self.rot_matrix = self.cosy.copy()
 
     def define_all_axes(self):
         """calculate the coordinate system"""
         # define the axes
         self.x_axis = (self.cogs[2] - self.cogs[1])  # from green to blue
+        print(np.linalg.norm(self.x_axis))
         self.x_axis = self.x_axis / np.linalg.norm(self.x_axis)
 
         midpoint = (self.cogs[2] + self.cogs[1]) / 2
@@ -120,9 +118,13 @@ class Tracker(object):
         # finally th z_axis
         self.z_axis = np.cross(self.x_axis, self.y_axis)
         self.z_axis = self.z_axis / np.linalg.norm(self.z_axis)
+        self.cosy = np.array([self.x_axis, self.y_axis, self.z_axis])
 
     def calclate_center(self):
         """calculate the center of the tracker"""
+        self.cogs = [get_cog(self.r_sphere),
+                     get_cog(self.g_sphere),
+                     get_cog(self.b_sphere)]
         self.center = np.mean(self.cogs, axis=0)
 
     def plot_axis(self, axis, axes, color, leng):
@@ -143,7 +145,7 @@ class Tracker(object):
         axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
             self.g_sphere.vectors, color='green', alpha=0.5))
         axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
-            self.b_sphere.vectors, color='blue', alpha=0.5))
+            self.b_sphere.vectors, color='purple', alpha=0.5))
 
     def plot_scatter(self, axes, r=0.75, alp=0.2):
         """plot the trackers"""
@@ -152,13 +154,21 @@ class Tracker(object):
         axes.scatter(self.cogs[1][0], self.cogs[1][1], self.cogs[1][2],
                      color='green', alpha=alp, s=np.pi*r**2*100)
         axes.scatter(self.cogs[2][0], self.cogs[2][1], self.cogs[2][2],
-                     color='blue', alpha=alp, s=np.pi*r**2*100)
+                     color='purple', alpha=alp, s=np.pi*r**2*100)
 
     def plot(self, axes, show_raw=False):
         """plot the trackers"""
         self.plot_raw(axes) if show_raw else None
         self.plot_scatter(axes)
         self.plot_cosys(axes)
+
+    def rotate(self, rot_matrix, center):
+        """rotate the trackers"""
+        self.r_sphere.rotate_using_matrix(rot_matrix, center)
+        self.g_sphere.rotate_using_matrix(rot_matrix, center)
+        self.b_sphere.rotate_using_matrix(rot_matrix, center)
+        self.calclate_center()
+        self.define_all_axes()
 
 
 class Finger(object):
@@ -198,6 +208,18 @@ class Finger(object):
         self.t_dp.plot(axes)
         self.t_mcp.plot(axes)
 
+    def rotate(self, rot_matrix, center):
+        """rotate the finger"""
+        self.dp.rotate_using_matrix(rot_matrix, point=center)
+        self.pip.rotate_using_matrix(rot_matrix, point=center)
+        self.mcp.rotate_using_matrix(rot_matrix, point=center)
+
+        if self.extra:
+            self.back.rotate_using_matrix(rot_matrix, point=center)
+
+        self.t_dp.rotate(rot_matrix, center)
+        self.t_mcp.rotate(rot_matrix, center)
+
 
 class HandMesh(object):
     """general hand class, which should handle all stl files"""
@@ -211,6 +233,14 @@ class HandMesh(object):
         self.bones = None
         if add_bones:
             self.bones = mesh.Mesh.from_file(f'{self.path}_BONES.stl')
+
+    def rotate(self, rot_matrix, center):
+        """rotate the hand"""
+        self.thumb.rotate(rot_matrix, center)
+        self.index.rotate(rot_matrix, center)
+
+        if self.bones:
+            self.bones.rotate(rot_matrix, center)
 
     def plot_bones(self, axes):
         """plot the bones"""
@@ -234,9 +264,10 @@ class HandMesh(object):
         scale = self.thumb.dp.points.flatten()
         axes.auto_scale_xyz(scale, scale, scale)
 
-        axes.set_xlabel('x')
-        axes.set_ylabel('y')
-        axes.set_zlabel('z')
+        # name axis and limit range
+        axes.set_xlabel('x [mm]')
+        axes.set_ylabel('y [mm]')
+        axes.set_zlabel('z [mm]')
         axes.set_xlim3d(-100, 50)
         axes.set_ylim3d(50, 200)
         axes.set_zlim3d(-100, 50)
@@ -244,18 +275,104 @@ class HandMesh(object):
         # Show the plot to the screen
         plt.show()
 
+    def update(self, loc_data):
+        """
+        Update the Hand using the current information of the measurement
+        loc_data contains:
+        {
+            'thumb': {
+                't_dp': {
+                    'pos': [x, y, z],
+                    'rot': [3x3 rotation matrix]
+                }
+                't_mcp': ..
+            },
+            'index': ..
+        }
+        """
+        # define the relevant rotation matrices
+        r_ct_0 = self.index.t_mcp.rot_matrix
+        r_0_ct = np.linalg.inv(r_ct_0)
+        r_0_tr = loc_data['index']['t_mcp']['rot']
+        r_tr_0 = np.linalg.inv(r_0_tr)
+
+        # define the relevant vectors
+
 
 # %%
 hand = HandMesh(add_bones=False)
-hand.plot()
+# hand.plot()
+
 
 # %%
-# %matplotlib qt
-figure = plt.figure(figsize=(14, 14))
-axes = mplot3d.Axes3D(figure)
-obj = hand.index.t_mcp
-obj.plot(axes)
-scale = obj.loc_mesh.points.flatten()
-axes.auto_scale_xyz(scale, scale, scale)
-plt.show()
+# hand.rotate(np.transpose(hand.index.t_dp.cosy), hand.index.t_dp.center)
+hand.plot()
+# %%
+
+
+def get_base_matrix(data, name, ind, scale=1000):
+    """get the quaternion base for the given index"""
+    loc_dict = getattr(data, name)
+    qw, qx, qy, qz = loc_dict['qw'], loc_dict['qx'], loc_dict['qy'], loc_dict['qz']
+    x, y, z = loc_dict['x'], loc_dict['y'], loc_dict['z']
+    q = Quaternion(qw[ind], qx[ind], qy[ind], qz[ind])
+    pos = [x[ind] * scale, y[ind] * scale, z[ind]*scale]
+    return q.rotation_matrix, pos
+
+
+def build_loc_data(data, ind, offset, scale=1000):
+    """build the location data for the given index"""
+    loc_dict = {}
+    # thumb
+    loc_dict['thumb'] = {}
+    rot_matirx, pos = get_base_matrix(data, 'daumen_dp', ind, scale)
+    loc_dict['thumb']['t_dp'] = {
+        'pos': pos,
+        'rot_matrix': rot_matirx
+    }
+    rot_matirx, pos = get_base_matrix(data, 'daumen_mc', ind, scale)
+    loc_dict['thumb']['t_mcp'] = {
+        'pos': pos,
+        'rot_matrix': rot_matirx
+    }
+    # index
+    loc_dict['index'] = {}
+    rot_matirx, pos = get_base_matrix(data, 'zf_dp', ind, scale)
+    loc_dict['index']['t_dp'] = {
+        'pos': pos,
+        'rot_matrix': rot_matirx
+    }
+    rot_matirx, pos = get_base_matrix(data, 'zf_pp', ind, scale)
+    loc_dict['index']['t_mcp'] = {
+        'pos': pos,
+        'rot_matrix': rot_matirx
+    }
+    return loc_dict
+
+
+def get_offset_ct_tr(data, hand: HandMesh):
+    """get the offset for the given data"""
+    loc_data = build_loc_data(data, 0, 0)
+    # get the required rot_matrices
+    r_ct_0 = hand.index.t_mcp.rot_matrix
+    r_0_tr = loc_data['index']['t_mcp']['rot_matrix']
+    # get the required vectors
+    v_0_ct_in_ct = hand.index.t_mcp.center
+    v_tr_0_in_tr = loc_data['index']['t_mcp']['pos']
+
+    v_tr_ct_in_ct = v_0_ct_in_ct + r_ct_0 @ r_0_tr @ v_tr_0_in_tr
+
+    return v_tr_ct_in_ct
+
+
+get_base_matrix(data, 'zf_pp', 1)
+offset = get_offset_ct_tr(data, hand)
+loc_data = build_loc_data(data, 0, 0)
+
+# %%
+hand.index.t_mcp.center
+# %%
+loc_data['index']['t_mcp']['pos']
+# %%
+offset
 # %%
