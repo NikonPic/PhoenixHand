@@ -1,5 +1,4 @@
 # %% show the stl files
-import matplotlib
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
 import numpy as np
@@ -145,7 +144,7 @@ class Tracker(object):
         axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
             self.g_sphere.vectors, color='green', alpha=0.5))
         axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
-            self.b_sphere.vectors, color='purple', alpha=0.5))
+            self.b_sphere.vectors, color='blue', alpha=0.5))
 
     def plot_scatter(self, axes, r=0.75, alp=0.2):
         """plot the trackers"""
@@ -154,7 +153,7 @@ class Tracker(object):
         axes.scatter(self.cogs[1][0], self.cogs[1][1], self.cogs[1][2],
                      color='green', alpha=alp, s=np.pi*r**2*100)
         axes.scatter(self.cogs[2][0], self.cogs[2][1], self.cogs[2][2],
-                     color='purple', alpha=alp, s=np.pi*r**2*100)
+                     color='blue', alpha=alp, s=np.pi*r**2*100)
 
     def plot(self, axes, show_raw=False):
         """plot the trackers"""
@@ -320,7 +319,7 @@ def get_base_matrix(data, name, ind, scale=1000):
     return q.rotation_matrix, pos
 
 
-def build_loc_data(data, ind, offset, scale=1000):
+def build_loc_data(data, ind, scale=1000):
     """build the location data for the given index"""
     loc_dict = {}
     # thumb
@@ -350,23 +349,27 @@ def build_loc_data(data, ind, offset, scale=1000):
     return loc_dict
 
 
-def get_offset_ct_tr(data, hand: HandMesh):
+def get_offset_ct_tr_and_rot(data, hand: HandMesh):
     """get the offset for the given data"""
-    loc_data = build_loc_data(data, 0, 0)
+    loc_data = build_loc_data(data, 0)
+
     # get the required rot_matrices
     r_ct_0 = hand.index.t_mcp.rot_matrix
     r_0_tr = loc_data['index']['t_mcp']['rot_matrix']
+
     # get the required vectors
-    v_0_ct_in_ct = hand.index.t_mcp.center
-    v_tr_0_in_tr = loc_data['index']['t_mcp']['pos']
+    v_ct_to_0_in_ct = hand.index.t_mcp.center
+    v_tr_to_0_in_tr = loc_data['index']['t_mcp']['pos']
 
-    v_tr_ct_in_ct = v_0_ct_in_ct + r_ct_0 @ r_0_tr @ v_tr_0_in_tr
+    # calculate the offset
+    r_ct_tr = r_ct_0 @ r_0_tr
+    v_tr_to_ct_in_ct = r_ct_tr @ v_tr_to_0_in_tr - v_ct_to_0_in_ct
 
-    return v_tr_ct_in_ct
+    return v_tr_to_ct_in_ct, r_ct_tr
 
 
 get_base_matrix(data, 'zf_pp', 1)
-offset = get_offset_ct_tr(data, hand)
+offset, r_ct_tr = get_offset_ct_tr_and_rot(data, hand)
 loc_data = build_loc_data(data, 0, 0)
 
 # %%
