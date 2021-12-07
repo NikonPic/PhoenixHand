@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
-
+from pyquaternion import Quaternion
 """
 Goal is to find the Transformation Matrix -> Red, Green, Blue -> Tracker System
 
@@ -16,10 +16,9 @@ Goal is to find the Transformation Matrix -> Red, Green, Blue -> Tracker System
 # %%
 path_csv = './data/Take 2021-12-06 03.42.36 PM.csv'
 data = pd.read_csv(path_csv, header=2)
-data.head()
 # %%
 # list of all the trackers
-switches = [False, False, False, False]
+switches = [False, True, True, True]
 tr_list = ['ZF DP', 'ZF MC', 'DAU DP', 'DAU MC']
 
 # List of all values
@@ -60,36 +59,42 @@ class TrackerOpt(object):
             setattr(self, f'marker{marker}', marker)
             self.cogs.append(np.array(marker_res))
 
-        print(self.cogs)
         self.center = np.mean(self.cogs, axis=0)
 
         # next calculate differences between trackers to determine the red one:
         self.diffs = [
-            np.linalg.norm(self.cogs[1] - self.cogs[2]),
-            np.linalg.norm(self.cogs[0] - self.cogs[2]),
             np.linalg.norm(self.cogs[0] - self.cogs[1]),
+            np.linalg.norm(self.cogs[1] - self.cogs[2]),
+            np.linalg.norm(self.cogs[2] - self.cogs[0]),
         ]
-        sel1 = self.diffs.index(min(self.diffs))
-        sel2 = self.diffs.index(max(self.diffs))
+
+        # find the red one
+        self.rels = [
+            abs((self.diffs[0] / self.diffs[2]) - 1),
+            abs((self.diffs[0] / self.diffs[1]) - 1),
+            abs((self.diffs[2] / self.diffs[1]) - 1),
+        ]
+
+        sel1 = self.rels.index(min(self.rels))
+        sel2 = self.rels.index(max(self.rels))
         sel3 = list(set(range(3)).difference([sel1, sel2]))[0]
 
         self.red = self.cogs[sel1]
         self.green = self.cogs[sel2]
         self.blue = self.cogs[sel3]
 
-        print(self.red, self.green, self.blue)
-
         if switch:
-            self.green = markers[sel3]
-            self.blue = markers[sel2]
+            self.green = self.cogs[sel3]
+            self.blue = self.cogs[sel2]
 
         self.define_all_axes()
+        self.get_transformation_from_tracker_to_quat_sys()
 
     def define_all_axes(self):
         """calculate the coordinate system"""
         # define the axes
         self.x_axis = (self.blue - self.green)  # from green to blue
-        print(np.linalg.norm(self.x_axis))
+        self.length = np.linalg.norm(self.x_axis)
         self.x_axis = self.x_axis / np.linalg.norm(self.x_axis)
 
         midpoint = (self.blue + self.green) / 2
@@ -106,6 +111,9 @@ class TrackerOpt(object):
         self.plot_axis(self.y_axis, axes, 'r', 5)
         self.plot_axis(self.z_axis, axes, 'g', 5)
 
+        axes.text(self.center[0], self.center[1],
+                  self.center[2], self.name, color='k')
+
     def plot_axis(self, axis, axes, color, leng):
         """plot the tracker in the axes"""
         x, y, z = [self.center[0]], [self.center[1]], [self.center[2]]
@@ -121,22 +129,53 @@ class TrackerOpt(object):
         axes.scatter(self.blue[0], self.blue[1], self.blue[2],
                      color='blue', alpha=alp, s=np.pi*r**2*100)
 
+    def get_transformation_from_tracker_to_quat_sys(self):
+        """Calculate the Transformation from the tracker to the actaul quaternion system"""
+        myq = Quaternion(self.quat)
+        t_quat_0 = myq.rotation_matrix[:3, :3]
+        t_tracker_0 = self.cosy
+        t_quat_tracker = t_quat_0 @ np.transpose(t_tracker_0)
+        self.t_q_tr = t_quat_tracker
+
     def plot(self, axes):
         self.plot_scatter(axes)
         self.plot_cosys(axes)
 
 
-figure = plt.figure(figsize=(14, 14))
-axes = mplot3d.Axes3D(figure)
+# build dict
+optdict = {}
+for tr, sw in zip(tr_list, switches):
+    tr_obj = TrackerOpt(tr, data, switch=sw)
+    optdict[tr] = tr_obj
 
-for tr in tr_list:
-    tr_obj = TrackerOpt(tr, data)
-    tr_obj.plot(axes)
+# reassign
+opttr = {}
+opttr['index'] = {
+    't_mcp': optdict['ZF MC'],
+    't_dp': optdict['ZF DP'],
+}
+opttr['thumb'] = {
+    't_mcp': optdict['DAU MC'],
+    't_dp': optdict['DAU DP'],
+}
 
-axes.set_xlabel('x [mm]')
-axes.set_ylabel('y [mm]')
-axes.set_zlabel('z [mm]')
-plt.show()
+
 # %%
-tr_obj.red
+if __name__ == '__main__':
+    figure = plt.figure(figsize=(14, 14))
+    axes = mplot3d.Axes3D(figure)
+
+    for tr, sw in zip(tr_list, switches):
+        tr_obj = TrackerOpt(tr, data, switch=sw)
+        tr_obj.plot(axes)
+
+    axes.set_xlabel('x [mm]')
+    axes.set_ylabel('y [mm]')
+    axes.set_zlabel('z [mm]')
+    plt.show()
+
+    print(tr_obj.center)
+    print(tr_obj.pos)
+    print(tr_obj.t_q_m)
+
 # %%

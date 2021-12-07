@@ -119,30 +119,31 @@ if __name__ == '__main__':
 
 
 # %%
-data.obs.keys()
+if __name__ == '__main__':
+    data.obs.keys()
 
-# %%
-data.obs['force_torques'][0].keys()
-# %%
-fx = [data.obs['force_torques'][i]['fx']
-      for i in range(len(data.obs['force_torques']))][0]
-fy = [data.obs['force_torques'][i]['fy']
-      for i in range(len(data.obs['force_torques']))][0]
-fz = [data.obs['force_torques'][i]['fz']
-      for i in range(len(data.obs['force_torques']))][0]
+    # %%
+    data.obs['force_torques'][0].keys()
+    # %%
+    fx = [data.obs['force_torques'][i]['fx']
+          for i in range(len(data.obs['force_torques']))][0]
+    fy = [data.obs['force_torques'][i]['fy']
+          for i in range(len(data.obs['force_torques']))][0]
+    fz = [data.obs['force_torques'][i]['fz']
+          for i in range(len(data.obs['force_torques']))][0]
 
-f_all = [np.sqrt(fxi**2 + fyi**2 + fzi**2)
-         for fxi, fyi, fzi in zip(fx, fy, fz)]
-# %%
-plt.plot(fx)
-plt.plot(fy)
-plt.plot(fz)
-# %%
-plt.plot(fx[0])
-# %%
-plt.figure(figsize=(14, 8))
-plt.plot(data.time, f_all)
-plt.grid()
-plt.xlabel('time [s]', fontsize=16)
-plt.ylabel('pincer force [N]', fontsize=16)
-# %%
+    f_all = [np.sqrt(fxi**2 + fyi**2 + fzi**2)
+             for fxi, fyi, fzi in zip(fx, fy, fz)]
+    # %%
+    plt.plot(fx)
+    plt.plot(fy)
+    plt.plot(fz)
+    # %%
+    plt.plot(fx[0])
+    # %%
+    plt.figure(figsize=(14, 8))
+    plt.plot(data.time, f_all)
+    plt.grid()
+    plt.xlabel('time [s]', fontsize=16)
+    plt.ylabel('pincer force [N]', fontsize=16)
+    # %%
