@@ -105,6 +105,26 @@ class TrackerOpt(object):
         self.z_axis = np.cross(self.x_axis, self.y_axis)
         self.z_axis = self.z_axis / np.linalg.norm(self.z_axis)
         self.cosy = np.array([self.x_axis, self.y_axis, self.z_axis])
+        self.optimize_cosy()
+
+    def optimize_cosy(self):
+        """optimize the tracker"""
+        x, y, z = self.x_axis, self.y_axis, self.z_axis
+
+        x = x / np.linalg.norm(x)
+        y = y / np.linalg.norm(y)
+        z = z / np.linalg.norm(z)
+
+        y = np.cross(z, x)
+        z = np.cross(x, y)
+        x = np.cross(y, z)
+
+        x = x / np.linalg.norm(x)
+        y = y / np.linalg.norm(y)
+        z = z / np.linalg.norm(z)
+
+        self.x_axis, self.y_axis, self.z_axis = x, y, z
+        self.cosy = np.array([self.x_axis, self.y_axis, self.z_axis])
 
     def plot_cosys(self, axes):
         self.plot_axis(self.x_axis, axes, 'b', 5)

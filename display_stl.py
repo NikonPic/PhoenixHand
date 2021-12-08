@@ -96,7 +96,7 @@ class Tracker(object):
             set([0, 1, 2]) - set([idx_max, idx_min]))[0]]
         self.b_sphere = spheres[idx_min]
 
-        self.calclate_center()
+        self.calculate_center()
         self.define_all_axes()
         self.rot_matrix = self.cosy.copy()
         self.opt_tr = opt_tr
@@ -130,12 +130,14 @@ class Tracker(object):
         self.z_axis = np.cross(self.x_axis, self.y_axis)
         self.z_axis = self.z_axis / np.linalg.norm(self.z_axis)
         self.cosy = np.array([self.x_axis, self.y_axis, self.z_axis])
+        self.optimize_cosy()
 
         # finally the rotation matrix
         self.rot_matrix = self.cosy.copy()
+        self.t_tr_ct = self.rot_matrix
         self.t_ct_tr = np.transpose(self.rot_matrix)
 
-    def calclate_center(self):
+    def calculate_center(self):
         """calculate the center of the tracker"""
         self.cogs = [get_cog(self.r_sphere),
                      get_cog(self.g_sphere),
@@ -148,6 +150,25 @@ class Tracker(object):
         x, y, z = [self.center[0]], [self.center[1]], [self.center[2]]
         u, v, w = [axis[0]], [axis[1]], [axis[2]]
         axes.quiver(x, y, z, u, v, w, color=color, length=leng)
+
+    def optimize_cosy(self):
+        """optimize the tracker"""
+        x, y, z = self.x_axis, self.y_axis, self.z_axis
+
+        x = x / np.linalg.norm(x)
+        y = y / np.linalg.norm(y)
+        z = z / np.linalg.norm(z)
+
+        y = np.cross(z, x)
+        z = np.cross(x, y)
+        x = np.cross(y, z)
+
+        x = x / np.linalg.norm(x)
+        y = y / np.linalg.norm(y)
+        z = z / np.linalg.norm(z)
+
+        self.x_axis, self.y_axis, self.z_axis = x, y, z
+        self.cosy = np.array([self.x_axis, self.y_axis, self.z_axis])
 
     def plot_cosys(self, axes):
         self.plot_axis(self.x_axis, axes, 'b', 5)
@@ -178,12 +199,24 @@ class Tracker(object):
         self.plot_scatter(axes)
         self.plot_cosys(axes)
 
+    def transform(self, rot_matrix, diff):
+        """transform the tracker"""
+        tr_mat = np.zeros((4, 4))
+        tr_mat[:3, :3] = rot_matrix
+        tr_mat[:3, 3] = diff
+
+        self.r_sphere.transform(tr_mat)
+        self.g_sphere.transform(tr_mat)
+        self.b_sphere.transform(tr_mat)
+        self.calculate_center()
+        self.define_all_axes()
+
     def rotate(self, rot_matrix, center):
         """rotate the trackers"""
         self.r_sphere.rotate_using_matrix(rot_matrix, center)
         self.g_sphere.rotate_using_matrix(rot_matrix, center)
         self.b_sphere.rotate_using_matrix(rot_matrix, center)
-        self.calclate_center()
+        self.calculate_center()
         self.define_all_axes()
 
     def translate(self, diffpos):
@@ -191,7 +224,7 @@ class Tracker(object):
         self.r_sphere.translate(diffpos)
         self.g_sphere.translate(diffpos)
         self.b_sphere.translate(diffpos)
-        self.calclate_center()
+        self.calculate_center()
         self.define_all_axes()
 
 
@@ -231,27 +264,34 @@ class Finger(object):
             't_mcp': ..
         }
         """
+        print(f'{self.name}')
+        print('Offset:', offset)
+        print('Scale:', scale)
+        print('Transformation:\n',  np.around(t_ct_opt, decimals=1))
+
         # 1. get the loc difference for dp and mcp
         new_pos_dp = loc_data['t_dp']['pos']
-        new_pos_dp = t_ct_opt @ new_pos_dp * scale - offset
+        new_pos_dp = t_ct_opt @ new_pos_dp * scale + offset
         diff_dp = new_pos_dp - self.t_dp.center
-        print(diff_dp)
+        print('Diff DP \n', np.around(diff_dp, decimals=1))
 
         new_pos_mcp = loc_data['t_mcp']['pos']
-        new_pos_mcp = t_ct_opt @ new_pos_mcp * scale - offset
-        diff_mcp = new_pos_dp - self.t_mcp.center
-        print(diff_mcp)
+        new_pos_mcp = t_ct_opt @ new_pos_mcp * scale + offset
+
+        diff_mcp = new_pos_mcp - self.t_mcp.pos
+        print('Diff MCP \n', np.around(diff_mcp, decimals=1))
 
         # 2. get the new transformation for dp and mcp
         t_q_opt = loc_data['t_dp']['rot_matrix']
         t_dpneu_ct = self.t_dp.t_tr_q @ t_q_opt @ np.transpose(t_ct_opt)
-        t_dpneu_dpold = t_dpneu_ct @ np.transpose(self.t_dp.rot_matrix)
-        print(t_dpneu_dpold)
+        t_dpneu_dpold = self.t_dp.t_ct_tr @ t_dpneu_ct
 
         t_q_opt = loc_data['t_mcp']['rot_matrix']
         t_mcpneu_ct = self.t_mcp.t_tr_q @ t_q_opt @ np.transpose(t_ct_opt)
-        t_mcpneu_mcpold = t_mcpneu_ct @ np.transpose(self.t_mcp.rot_matrix)
-        print(t_mcpneu_mcpold)
+        print('t_mcpneu_ct \n', np.around(t_mcpneu_ct, decimals=1))
+        print('t_mcpold_ct \n', np.around(self.t_mcp.rot_matrix, decimals=1))
+        t_mcpneu_mcpold = self.t_mcp.t_ct_tr @ t_mcpneu_ct
+        print('t_mcpneu_mcpold \n', np.around(t_mcpneu_mcpold, decimals=1))
 
         # 2. apply the transformation and rotation on the meshes
         self.dp.rotate_using_matrix(t_dpneu_dpold, point=self.t_dp.center)
@@ -267,24 +307,27 @@ class Finger(object):
                 t_mcpneu_mcpold, point=self.t_mcp.center)
 
         # 3. apply the transformation on the trackers
+        # self.t_dp.transform(t_dpneu_dpold, diff_dp)
         self.t_dp.translate(diff_dp)
         self.t_dp.rotate(t_dpneu_dpold, center=self.t_dp.center)
 
+        #self.t_mcp.transform(t_mcpneu_mcpold, diff_mcp)
         self.t_mcp.translate(diff_mcp)
         self.t_mcp.rotate(t_mcpneu_mcpold, center=self.t_mcp.center)
+        print('t_mcpneu_ct \n', np.around(self.t_mcp.rot_matrix, decimals=1))
 
     def plot(self, axes, alp=0.5):
         """plot the finger"""
         axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
             self.dp.vectors, color='lightblue', alpha=alp))
-        axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
-            self.pip.vectors, color='grey', alpha=alp))
-        axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
-            self.mcp.vectors, color='darkgrey', alpha=alp))
+        # axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
+        #    self.pip.vectors, color='grey', alpha=alp))
+        # axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
+        #    self.mcp.vectors, color='darkgrey', alpha=alp))
 
-        if self.extra:
-            axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
-                self.back.vectors, color='silver', alpha=alp))
+        # if self.extra:
+        #    axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
+        #        self.back.vectors, color='silver', alpha=alp))
 
         self.t_dp.plot(axes)
         self.t_mcp.plot(axes)
@@ -343,6 +386,24 @@ class HandMesh(object):
             axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
                 self.bones.vectors, color='gold', alpha=0.05))
 
+    def define_limits(self, offset=30):
+        """define the limits of the hand"""
+        # xlims
+        self.x_min = np.min([self.thumb.t_dp.center[0], self.index.t_dp.center[0],
+                             self.thumb.t_mcp.center[0], self.index.t_mcp.center[0]]) - offset
+        self.x_max = np.max([self.thumb.t_dp.center[0], self.index.t_dp.center[0],
+                             self.thumb.t_mcp.center[0], self.index.t_mcp.center[0]]) + offset
+        # ylims
+        self.y_min = np.min([self.thumb.t_dp.center[1], self.index.t_dp.center[1],
+                             self.thumb.t_mcp.center[1], self.index.t_mcp.center[1]]) - offset
+        self.y_max = np.max([self.thumb.t_dp.center[1], self.index.t_dp.center[1],
+                             self.thumb.t_mcp.center[1], self.index.t_mcp.center[1]]) + offset
+        # zlims
+        self.z_min = np.min([self.thumb.t_dp.center[2], self.index.t_dp.center[2],
+                             self.thumb.t_mcp.center[2], self.index.t_mcp.center[2]]) - offset
+        self.z_max = np.max([self.thumb.t_dp.center[2], self.index.t_dp.center[2],
+                             self.thumb.t_mcp.center[2], self.index.t_mcp.center[2]]) + offset
+
     def plot(self):
         """plot the hand"""
         figure = plt.figure(figsize=(14, 14))
@@ -363,9 +424,11 @@ class HandMesh(object):
         axes.set_xlabel('x [mm]')
         axes.set_ylabel('y [mm]')
         axes.set_zlabel('z [mm]')
-        #axes.set_xlim3d(-100, 50)
-        #axes.set_ylim3d(50, 200)
-        #axes.set_zlim3d(-100, 50)
+
+        self.define_limits()
+        axes.set_xlim3d(self.x_min, self.x_max)
+        axes.set_ylim3d(self.y_min, self.y_max)
+        axes.set_zlim3d(self.z_min, self.z_max)
 
         # Show the plot to the screen
         plt.show()
@@ -397,7 +460,7 @@ class HandMesh(object):
 
     def get_scale(self):
         """get the scale between opt and ct sys"""
-        self.scale = 1  # self.index.t_mcp.scale
+        self.scale = self.index.t_mcp.scale
 
     def get_rot_opt_to_ct(self, t_q_opt):
         """get the rotation matrix from opt sys to ct sys - using the current position of the index mcp sys"""
@@ -408,8 +471,8 @@ class HandMesh(object):
 
     def get_offset_ct_opt(self, loc_data: dict):
         """get the offset between opt and ct sys"""
-        offset = self.t_ct_opt @ loc_data['index']['t_mcp']['pos'] * \
-            self.scale - self.index.t_mcp.pos
+        offset = self.index.t_mcp.pos - \
+            self.t_ct_opt @ loc_data['index']['t_mcp']['pos'] * self.scale
         return offset
 
 
@@ -505,5 +568,25 @@ hand = HandMesh(opttr, add_bones=False)
 widgets.interact(update_all, ind=idx)
 
 # %%
-build_loc_data(data, 0)
+build_loc_data(data, 5)
+# %%
+rotm = hand.index.t_dp.rot_matrix
+np.linalg.det(rotm)
+# %%
+rot2 = np.array([
+    [0, 1, 0],
+    [-1, 0, 0],
+    [0, 0, 1]
+])
+rot2
+
+# %%
+new_rot = np.transpose(rotm) @ rot2
+
+# %%
+hand.index.t_dp.rotate(new_rot, center=hand.index.t_dp.center)
+rotm = hand.index.t_dp.rot_matrix
+print(rotm)
+# %%
+
 # %%
