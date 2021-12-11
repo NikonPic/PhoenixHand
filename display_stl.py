@@ -71,6 +71,7 @@ class Tracker(object):
     def __init__(self, path, name, finger_mesh, opt_tr: TrackerOpt) -> None:
         super().__init__()
         self.path = path
+        self.name = name
         self.loc_mesh = mesh.Mesh.from_file(f'{self.path}_TRACKER {name}.stl')
         sphere0, sphere1, sphere2 = get_triple_header(
             self.loc_mesh)
@@ -175,6 +176,9 @@ class Tracker(object):
         self.plot_axis(self.y_axis, axes, 'r', 5)
         self.plot_axis(self.z_axis, axes, 'g', 5)
 
+        axes.text(self.center[0], self.center[1],
+                  self.center[2], self.name, color='k')
+
     def plot_raw(self, axes):
         """plot the trackers"""
         axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
@@ -227,6 +231,39 @@ class Tracker(object):
         self.calculate_center()
         self.define_all_axes()
 
+    def update(self, t_ct_opt, offset, scale, loc_data):
+        """
+        Update the finger system using the offset, the scale and the new loc_data
+        loc_data : {
+            'pos' : [x,y,z]
+            'rot_matrix' : [..]
+        }
+        - also use the transformation from ct->opt
+        - perform updates
+        - return the diff and rotation applyed
+        """
+        # 1. take data from loc-data
+        t_opt_ct = np.transpose(t_ct_opt)
+        pos = loc_data['pos']
+        t_q_opt = loc_data['rot_matrix']
+
+        # 2. calculate the difference in position
+        new_pos = t_ct_opt @ pos * scale + offset
+        diff_pos = new_pos - self.center
+
+        # 3. calculate the difference in rotation
+        t_tr_q = self.t_tr_q
+        t_ct_old = self.t_ct_tr
+        t_tr_ct = t_tr_q @ t_q_opt @ t_opt_ct
+        t_neu_old = t_tr_q @ t_q_opt @ t_opt_ct @ t_ct_old
+
+        # 4. return diffpos and rotation
+        print(self.name)
+        print(np.around(t_tr_ct, decimals=1))
+        print(np.around(t_neu_old, decimals=1))
+        print(np.around(diff_pos, decimals=1))
+        return diff_pos, t_neu_old
+
 
 class Finger(object):
     """each finger has dp, pip, mcp and two trackers"""
@@ -264,70 +301,43 @@ class Finger(object):
             't_mcp': ..
         }
         """
-        print(f'{self.name}')
-        print('Offset:', offset)
-        print('Scale:', scale)
-        print('Transformation:\n',  np.around(t_ct_opt, decimals=1))
-
-        # 1. get the loc difference for dp and mcp
-        new_pos_dp = loc_data['t_dp']['pos']
-        new_pos_dp = t_ct_opt @ new_pos_dp * scale + offset
-        diff_dp = new_pos_dp - self.t_dp.center
-        print('Diff DP \n', np.around(diff_dp, decimals=1))
-
-        new_pos_mcp = loc_data['t_mcp']['pos']
-        new_pos_mcp = t_ct_opt @ new_pos_mcp * scale + offset
-
-        diff_mcp = new_pos_mcp - self.t_mcp.pos
-        print('Diff MCP \n', np.around(diff_mcp, decimals=1))
-
-        # 2. get the new transformation for dp and mcp
-        t_q_opt = loc_data['t_dp']['rot_matrix']
-        t_dpneu_ct = self.t_dp.t_tr_q @ t_q_opt @ np.transpose(t_ct_opt)
-        t_dpneu_dpold = self.t_dp.t_ct_tr @ t_dpneu_ct
-
-        t_q_opt = loc_data['t_mcp']['rot_matrix']
-        t_mcpneu_ct = self.t_mcp.t_tr_q @ t_q_opt @ np.transpose(t_ct_opt)
-        print('t_mcpneu_ct \n', np.around(t_mcpneu_ct, decimals=1))
-        print('t_mcpold_ct \n', np.around(self.t_mcp.rot_matrix, decimals=1))
-        t_mcpneu_mcpold = self.t_mcp.t_ct_tr @ t_mcpneu_ct
-        print('t_mcpneu_mcpold \n', np.around(t_mcpneu_mcpold, decimals=1))
+        diff_dp, rot_dp = self.t_dp.update(
+            t_ct_opt, offset, scale, loc_data['t_dp'])
+        diff_mcp, rot_mcp = self.t_mcp.update(
+            t_ct_opt, offset, scale, loc_data['t_mcp'])
 
         # 2. apply the transformation and rotation on the meshes
-        self.dp.rotate_using_matrix(t_dpneu_dpold, point=self.t_dp.center)
+        self.dp.rotate_using_matrix(rot_dp, point=self.t_dp.center)
         self.dp.translate(diff_dp)
 
         if self.extra:
             self.back.translate(diff_mcp)
             self.back.rotate_using_matrix(
-                t_mcpneu_mcpold, point=self.t_mcp.center)
+                rot_mcp, point=self.t_mcp.center)
         else:
             self.mcp.translate(diff_mcp)
             self.mcp.rotate_using_matrix(
-                t_mcpneu_mcpold, point=self.t_mcp.center)
+                rot_mcp, point=self.t_mcp.center)
 
         # 3. apply the transformation on the trackers
-        # self.t_dp.transform(t_dpneu_dpold, diff_dp)
         self.t_dp.translate(diff_dp)
-        self.t_dp.rotate(t_dpneu_dpold, center=self.t_dp.center)
+        self.t_dp.rotate(rot_dp, center=self.t_dp.center)
 
-        #self.t_mcp.transform(t_mcpneu_mcpold, diff_mcp)
         self.t_mcp.translate(diff_mcp)
-        self.t_mcp.rotate(t_mcpneu_mcpold, center=self.t_mcp.center)
-        print('t_mcpneu_ct \n', np.around(self.t_mcp.rot_matrix, decimals=1))
+        self.t_mcp.rotate(rot_mcp, center=self.t_mcp.center)
 
     def plot(self, axes, alp=0.5):
         """plot the finger"""
         axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
             self.dp.vectors, color='lightblue', alpha=alp))
-        # axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
-        #    self.pip.vectors, color='grey', alpha=alp))
-        # axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
-        #    self.mcp.vectors, color='darkgrey', alpha=alp))
+        axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
+            self.pip.vectors, color='grey', alpha=alp))
+        axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
+            self.mcp.vectors, color='darkgrey', alpha=alp))
 
-        # if self.extra:
-        #    axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
-        #        self.back.vectors, color='silver', alpha=alp))
+        if self.extra:
+            axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
+                self.back.vectors, color='silver', alpha=alp))
 
         self.t_dp.plot(axes)
         self.t_mcp.plot(axes)
@@ -386,23 +396,28 @@ class HandMesh(object):
             axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
                 self.bones.vectors, color='gold', alpha=0.05))
 
-    def define_limits(self, offset=30):
+    def define_limits(self, offset=30, use_limits=False):
         """define the limits of the hand"""
-        # xlims
-        self.x_min = np.min([self.thumb.t_dp.center[0], self.index.t_dp.center[0],
-                             self.thumb.t_mcp.center[0], self.index.t_mcp.center[0]]) - offset
-        self.x_max = np.max([self.thumb.t_dp.center[0], self.index.t_dp.center[0],
-                             self.thumb.t_mcp.center[0], self.index.t_mcp.center[0]]) + offset
-        # ylims
-        self.y_min = np.min([self.thumb.t_dp.center[1], self.index.t_dp.center[1],
-                             self.thumb.t_mcp.center[1], self.index.t_mcp.center[1]]) - offset
-        self.y_max = np.max([self.thumb.t_dp.center[1], self.index.t_dp.center[1],
-                             self.thumb.t_mcp.center[1], self.index.t_mcp.center[1]]) + offset
-        # zlims
-        self.z_min = np.min([self.thumb.t_dp.center[2], self.index.t_dp.center[2],
-                             self.thumb.t_mcp.center[2], self.index.t_mcp.center[2]]) - offset
-        self.z_max = np.max([self.thumb.t_dp.center[2], self.index.t_dp.center[2],
-                             self.thumb.t_mcp.center[2], self.index.t_mcp.center[2]]) + offset
+        if use_limits:
+            # xlims
+            self.x_min = np.min([self.thumb.t_dp.center[0], self.index.t_dp.center[0],
+                                self.thumb.t_mcp.center[0], self.index.t_mcp.center[0]]) - offset
+            self.x_max = np.max([self.thumb.t_dp.center[0], self.index.t_dp.center[0],
+                                self.thumb.t_mcp.center[0], self.index.t_mcp.center[0]]) + offset
+            # ylims
+            self.y_min = np.min([self.thumb.t_dp.center[1], self.index.t_dp.center[1],
+                                self.thumb.t_mcp.center[1], self.index.t_mcp.center[1]]) - offset
+            self.y_max = np.max([self.thumb.t_dp.center[1], self.index.t_dp.center[1],
+                                self.thumb.t_mcp.center[1], self.index.t_mcp.center[1]]) + offset
+            # zlims
+            self.z_min = np.min([self.thumb.t_dp.center[2], self.index.t_dp.center[2],
+                                self.thumb.t_mcp.center[2], self.index.t_mcp.center[2]]) - offset
+            self.z_max = np.max([self.thumb.t_dp.center[2], self.index.t_dp.center[2],
+                                self.thumb.t_mcp.center[2], self.index.t_mcp.center[2]]) + offset
+        else:
+            self.x_min, self.x_max = -160, 40,
+            self.y_min, self.y_max = 80, 280,
+            self.z_min, self.z_max = -200, 0
 
     def plot(self):
         """plot the hand"""
@@ -567,26 +582,19 @@ hand = HandMesh(opttr, add_bones=False)
 # %%
 widgets.interact(update_all, ind=idx)
 
-# %%
-build_loc_data(data, 5)
-# %%
-rotm = hand.index.t_dp.rot_matrix
-np.linalg.det(rotm)
-# %%
-rot2 = np.array([
-    [0, 1, 0],
-    [-1, 0, 0],
-    [0, 0, 1]
-])
-rot2
+# %% init new hand
+hand = HandMesh(opttr, add_bones=False)
+loc_data = build_loc_data(data, 0)
+# %% get all required rotation matrices for mcp index only:
+t_q_opt = loc_data['index']['t_mcp']['rot_matrix']
+t_opt_q = np.transpose(t_q_opt)
+t_tr_ct = hand.index.t_mcp.t_tr_ct
+t_ct_tr = hand.index.t_mcp.t_ct_tr
+t_tr_q = hand.index.t_mcp.t_tr_q
+t_q_tr = np.transpose(t_tr_q)
 
 # %%
-new_rot = np.transpose(rotm) @ rot2
+# buid the required multiplication
 
-# %%
-hand.index.t_dp.rotate(new_rot, center=hand.index.t_dp.center)
-rotm = hand.index.t_dp.rot_matrix
-print(rotm)
-# %%
-
+np.around(t_tr_q @ t_q_opt @ t_opt_q @ t_q_tr @ t_tr_ct @ t_ct_tr, decimals=1)
 # %%

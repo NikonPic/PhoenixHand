@@ -11,8 +11,6 @@ Goal is to find the Transformation Matrix -> Red, Green, Blue -> Tracker System
 2. We need the Coordinate System of the Red Green Blue System
 3. We need the Transformation Matrix from the Red Green Blue System to the Tracker System
 """
-
-
 # %%
 path_csv = './data/Take 2021-12-06 03.42.36 PM.csv'
 data = pd.read_csv(path_csv, header=2)
@@ -36,6 +34,7 @@ end_id = 100
 
 
 def get_m(data, name, start_id=10, end_id=200):
+    """get the mean of this array, excluding nan's"""
     arr = np.array([float(d) for d in data[name][start_id:end_id]])
     arr = arr[np.logical_not(np.isnan(arr))]
     return np.mean(arr)
@@ -75,6 +74,7 @@ class TrackerOpt(object):
             abs((self.diffs[2] / self.diffs[1]) - 1),
         ]
 
+        # red sphere is the one with the unequal length compared to others
         sel1 = self.rels.index(min(self.rels))
         sel2 = self.rels.index(max(self.rels))
         sel3 = list(set(range(3)).difference([sel1, sel2]))[0]
@@ -196,6 +196,11 @@ if __name__ == '__main__':
 
     print(tr_obj.center)
     print(tr_obj.pos)
-    print(tr_obj.t_q_m)
+    print(np.around(tr_obj.t_q_tr, decimals=2))
+    print(np.linalg.det(tr_obj.t_q_tr))
 
+# %%
+x, y, z = tr_obj.t_q_tr
+# %%
+np.linalg.norm(x)
 # %%
