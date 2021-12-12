@@ -150,7 +150,7 @@ class TrackerOpt(object):
                      color='blue', alpha=alp, s=np.pi*r**2*100)
 
     def get_transformation_from_tracker_to_quat_sys(self):
-        """Calculate the Transformation from the tracker to the actaul quaternion system"""
+        """Calculate the Transformation from the tracker to the actual quaternion system"""
         myq = Quaternion(self.quat)
         t_quat_0 = myq.rotation_matrix[:3, :3]
         t_tracker_0 = self.cosy

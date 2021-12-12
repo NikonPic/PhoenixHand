@@ -68,10 +68,11 @@ def get_cog(loc_mesh: mesh.Mesh, as_mean=True):
 class Tracker(object):
     """Class to handle the tracker spheres"""
 
-    def __init__(self, path, name, finger_mesh, opt_tr: TrackerOpt) -> None:
+    def __init__(self, path, name, finger_mesh, opt_tr: TrackerOpt, my_mesh) -> None:
         super().__init__()
         self.path = path
         self.name = name
+        self.my_mesh = my_mesh
         self.loc_mesh = mesh.Mesh.from_file(f'{self.path}_TRACKER {name}.stl')
         sphere0, sphere1, sphere2 = get_triple_header(
             self.loc_mesh)
@@ -199,6 +200,8 @@ class Tracker(object):
 
     def plot(self, axes, show_raw=False):
         """plot the trackers"""
+        axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
+            self.my_mesh.vectors, color='lightblue', alpha=0.5))
         self.plot_raw(axes) if show_raw else None
         self.plot_scatter(axes)
         self.plot_cosys(axes)
@@ -217,14 +220,19 @@ class Tracker(object):
 
     def rotate(self, rot_matrix, center):
         """rotate the trackers"""
+        self.my_mesh.rotate_using_matrix(rot_matrix, center)
         self.r_sphere.rotate_using_matrix(rot_matrix, center)
         self.g_sphere.rotate_using_matrix(rot_matrix, center)
         self.b_sphere.rotate_using_matrix(rot_matrix, center)
         self.calculate_center()
         self.define_all_axes()
 
+        print('new rot:')
+        print(np.around(self.t_tr_ct, decimals=1))
+
     def translate(self, diffpos):
         """translate the trackers"""
+        self.my_mesh.translate(diffpos)
         self.r_sphere.translate(diffpos)
         self.g_sphere.translate(diffpos)
         self.b_sphere.translate(diffpos)
@@ -254,15 +262,27 @@ class Tracker(object):
         # 3. calculate the difference in rotation
         t_tr_q = self.t_tr_q
         t_ct_old = self.t_ct_tr
-        t_tr_ct = t_tr_q @ t_q_opt @ t_opt_ct
+        t_new_ct = t_tr_q @ t_q_opt @ t_opt_ct
         t_neu_old = t_tr_q @ t_q_opt @ t_opt_ct @ t_ct_old
+
+        # alternative
+        # t_new_ct = t_opt_ct @ t_q_opt @ t_tr_q
+        # t_neu_old = t_ct_old @ t_opt_ct @ t_q_opt @ t_tr_q
+
+        # why is this working...
+        inv_rot = t_ct_old @ t_new_ct
 
         # 4. return diffpos and rotation
         print(self.name)
-        print(np.around(t_tr_ct, decimals=1))
+        print('des rot:')
+        print(np.around(t_new_ct, decimals=1))
+        print('req rot:')
         print(np.around(t_neu_old, decimals=1))
-        print(np.around(diff_pos, decimals=1))
-        return diff_pos, t_neu_old
+
+        # 5. apply transformation
+        self.rotate(t_ct_old, self.center)
+        self.rotate(t_new_ct, self.center)
+        self.translate(diff_pos)
 
 
 class Finger(object):
@@ -278,16 +298,19 @@ class Finger(object):
         self.pip = mesh.Mesh.from_file(f'{self.path}_{name} PIP.stl')
         self.mcp = mesh.Mesh.from_file(f'{self.path}_{name} MCP.stl')
 
-        # trackers
-        self.t_dp = Tracker(
-            self.path, f'{name}', self.dp, opttr_finger['t_dp'])
-        self.t_mcp = Tracker(
-            self.path, f'{name} MCP', self.mcp, opttr_finger['t_mcp'])
-
         self.extra = extra
         if extra:
             self.back = mesh.Mesh.from_file(
                 f'{self.path}_{name} HANDRÜCKEN.stl')
+
+        # trackers
+        dp_mesh = self.dp
+        self.t_dp = Tracker(
+            self.path, f'{name}', self.dp, opttr_finger['t_dp'], dp_mesh)
+
+        mcp_mesh = self.back if self.extra else self.mcp
+        self.t_mcp = Tracker(
+            self.path, f'{name} MCP', self.mcp, opttr_finger['t_mcp'], mcp_mesh)
 
     def update(self, loc_data: dict, t_ct_opt, offset, scale):
         """
@@ -301,43 +324,19 @@ class Finger(object):
             't_mcp': ..
         }
         """
-        diff_dp, rot_dp = self.t_dp.update(
-            t_ct_opt, offset, scale, loc_data['t_dp'])
-        diff_mcp, rot_mcp = self.t_mcp.update(
-            t_ct_opt, offset, scale, loc_data['t_mcp'])
+        self.t_dp.update(t_ct_opt, offset, scale, loc_data['t_dp'])
+        self.t_mcp.update(t_ct_opt, offset, scale, loc_data['t_mcp'])
 
-        # 2. apply the transformation and rotation on the meshes
-        self.dp.rotate_using_matrix(rot_dp, point=self.t_dp.center)
-        self.dp.translate(diff_dp)
-
-        if self.extra:
-            self.back.translate(diff_mcp)
-            self.back.rotate_using_matrix(
-                rot_mcp, point=self.t_mcp.center)
-        else:
-            self.mcp.translate(diff_mcp)
-            self.mcp.rotate_using_matrix(
-                rot_mcp, point=self.t_mcp.center)
-
-        # 3. apply the transformation on the trackers
-        self.t_dp.translate(diff_dp)
-        self.t_dp.rotate(rot_dp, center=self.t_dp.center)
-
-        self.t_mcp.translate(diff_mcp)
-        self.t_mcp.rotate(rot_mcp, center=self.t_mcp.center)
-
-    def plot(self, axes, alp=0.5):
+    def plot(self, axes, alp=0.5, plot_extra=False):
         """plot the finger"""
-        axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
-            self.dp.vectors, color='lightblue', alpha=alp))
-        axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
-            self.pip.vectors, color='grey', alpha=alp))
-        axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
-            self.mcp.vectors, color='darkgrey', alpha=alp))
 
-        if self.extra:
+        if plot_extra:
             axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
-                self.back.vectors, color='silver', alpha=alp))
+                self.pip.vectors, color='grey', alpha=alp))
+
+            if self.extra:
+                axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
+                    self.mcp.vectors, color='darkgrey', alpha=alp))
 
         self.t_dp.plot(axes)
         self.t_mcp.plot(axes)
@@ -416,7 +415,7 @@ class HandMesh(object):
                                 self.thumb.t_mcp.center[2], self.index.t_mcp.center[2]]) + offset
         else:
             self.x_min, self.x_max = -160, 40,
-            self.y_min, self.y_max = 80, 280,
+            self.y_min, self.y_max = 120, 320,
             self.z_min, self.z_max = -200, 0
 
     def plot(self):
@@ -482,6 +481,9 @@ class HandMesh(object):
         t_ct_tr = self.index.t_mcp.t_ct_tr
         t_tr_q = self.index.t_mcp.t_tr_q
         t_ct_opt = t_ct_tr @ t_tr_q @ t_q_opt
+
+        # alternative..
+        # t_ct_opt = t_q_opt @ t_tr_q @ t_ct_tr
         return t_ct_opt
 
     def get_offset_ct_opt(self, loc_data: dict):
@@ -489,23 +491,6 @@ class HandMesh(object):
         offset = self.index.t_mcp.pos - \
             self.t_ct_opt @ loc_data['index']['t_mcp']['pos'] * self.scale
         return offset
-
-
-def calculate_scale(hand: HandMesh, optdict: dict):
-    """
-    get the scale by comparing the lengths of the x-axis
-    """
-    lct = hand.index.t_mcp.length
-    lopt = optdict['ZF MC'].length
-    print('Length in CT:', lct)
-    print('Length in Opt:', lopt)
-    print('Scale:', lct/lopt)
-
-    lct = hand.thumb.t_mcp.length
-    lopt = optdict['DAU MC'].length
-    print('Length in CT:', lct)
-    print('Length in Opt:', lopt)
-    print('Scale:', lct/lopt)
 
 
 def get_base_matrix(data, name, ind, scale=1):
@@ -548,29 +533,10 @@ def build_loc_data(data, ind, scale=1000):
     return loc_dict
 
 
-def get_offset_ct_tr_and_rot(data, hand: HandMesh, opttr: dict):
-    """get the offset for the given data"""
-    loc_data = build_loc_data(data, 0)
-
-    # get the required rot_matrices
-    r_ct_0 = hand.index.t_mcp.rot_matrix
-    r_0_tr = loc_data['index']['t_mcp']['rot_matrix']
-
-    # get the required vectors
-    v_ct_to_0_in_ct = hand.index.t_mcp.center
-    v_tr_to_0_in_tr = loc_data['index']['t_mcp']['pos']
-
-    # calculate the offset
-    r_ct_tr = r_ct_0 @ r_0_tr
-    v_tr_to_ct_in_ct = r_ct_tr @ v_tr_to_0_in_tr - v_ct_to_0_in_ct
-
-    return v_tr_to_ct_in_ct, r_ct_tr
-
-
-def update_all(ind):
+def update_all(ind, plotit=False):
     loc_data = build_loc_data(data, ind)
     hand.update(loc_data)
-    hand.plot()
+    hand.plot() if plotit else None
 
 
 # %%
@@ -597,4 +563,7 @@ t_q_tr = np.transpose(t_tr_q)
 # buid the required multiplication
 
 np.around(t_tr_q @ t_q_opt @ t_opt_q @ t_q_tr @ t_tr_ct @ t_ct_tr, decimals=1)
+# %%
+np.around(t_ct_tr @ t_tr_ct @ t_q_tr @ t_opt_q @ t_q_opt @ t_tr_q, decimals=1)
+
 # %%
