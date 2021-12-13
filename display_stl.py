@@ -227,7 +227,6 @@ class Tracker(object):
         self.calculate_center()
         self.define_all_axes()
 
-        print('new rot:')
         print(np.around(self.t_tr_ct, decimals=1))
 
     def translate(self, diffpos):
@@ -250,6 +249,11 @@ class Tracker(object):
         - perform updates
         - return the diff and rotation applyed
         """
+        tidx_ct_tr, tidx_tr_q, tidx_q_opt = t_ct_opt
+        t_ct_opt = tidx_ct_tr @ tidx_tr_q @ tidx_q_opt
+        tidx_tr_ct, tidx_q_tr, tidx_opt_q = np.transpose(
+            tidx_ct_tr), np.transpose(tidx_tr_q), np.transpose(tidx_q_opt)
+
         # 1. take data from loc-data
         t_opt_ct = np.transpose(t_ct_opt)
         pos = loc_data['pos']
@@ -262,12 +266,8 @@ class Tracker(object):
         # 3. calculate the difference in rotation
         t_tr_q = self.t_tr_q
         t_ct_old = self.t_ct_tr
-        t_new_ct = t_tr_q @ t_q_opt @ t_opt_ct
-        t_neu_old = t_tr_q @ t_q_opt @ t_opt_ct @ t_ct_old
-
-        # alternative
-        # t_new_ct = t_opt_ct @ t_q_opt @ t_tr_q
-        # t_neu_old = t_ct_old @ t_opt_ct @ t_q_opt @ t_tr_q
+        t_new_ct = t_tr_q @ t_q_opt @ tidx_opt_q @ tidx_q_tr @ tidx_tr_ct
+        t_neu_old = t_tr_q @ t_q_opt @ tidx_opt_q @ tidx_q_tr @ tidx_tr_ct @ t_ct_old
 
         # why is this working...
         inv_rot = t_ct_old @ t_new_ct
@@ -280,8 +280,10 @@ class Tracker(object):
         print(np.around(t_neu_old, decimals=1))
 
         # 5. apply transformation
-        self.rotate(t_ct_old, self.center)
-        self.rotate(t_new_ct, self.center)
+        # print('rot steps:')
+
+        print('final1:')
+        self.rotate(inv_rot, self.center)
         self.translate(diff_pos)
 
 
@@ -465,7 +467,7 @@ class HandMesh(object):
         # define the relevant rotation matrices
         t_ct_opt = self.get_rot_opt_to_ct(
             loc_data['index']['t_mcp']['rot_matrix'])
-        self.t_ct_opt = t_ct_opt
+        self.t_ct_opt = t_ct_opt[0] @ t_ct_opt[1] @ t_ct_opt[2]
         offset = self.get_offset_ct_opt(loc_data)
 
         # update the hand
@@ -484,7 +486,7 @@ class HandMesh(object):
 
         # alternative..
         # t_ct_opt = t_q_opt @ t_tr_q @ t_ct_tr
-        return t_ct_opt
+        return t_ct_tr, t_tr_q, t_q_opt
 
     def get_offset_ct_opt(self, loc_data: dict):
         """get the offset between opt and ct sys"""
@@ -543,7 +545,7 @@ def update_all(ind, plotit=False):
 idx = widgets.IntSlider(value=0, min=0, max=len(data.time))
 hand = HandMesh(opttr, add_bones=False)
 # hand.plot()
-
+update_all(0)
 
 # %%
 widgets.interact(update_all, ind=idx)
