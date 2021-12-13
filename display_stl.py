@@ -261,21 +261,24 @@ class Tracker(object):
 
         # 2. calculate the difference in position
         new_pos = t_ct_opt @ pos * scale + offset
-        diff_pos = new_pos - self.center
+        diff_pos = (new_pos - self.center)
 
         # 3. calculate the difference in rotation
         t_tr_q = self.t_tr_q
         t_ct_old = self.t_ct_tr
         t_new_ct = t_tr_q @ t_q_opt @ tidx_opt_q @ tidx_q_tr @ tidx_tr_ct
         t_neu_old = t_tr_q @ t_q_opt @ tidx_opt_q @ tidx_q_tr @ tidx_tr_ct @ t_ct_old
+        t_ct_new = np.transpose(t_new_ct)
 
         # why is this working...
+        # -> because the notation is: R_new = R_old * R_new
+        # -> R_trnew_ct = R_trold_ct * R_ct_trold * R_trnew_ct
         inv_rot = t_ct_old @ t_new_ct
 
         # 4. return diffpos and rotation
         print(self.name)
         print('des rot:')
-        print(np.around(t_new_ct, decimals=1))
+        print(np.around(t_ct_new, decimals=1))
         print('req rot:')
         print(np.around(t_neu_old, decimals=1))
 
@@ -402,25 +405,25 @@ class HandMesh(object):
         if use_limits:
             # xlims
             self.x_min = np.min([self.thumb.t_dp.center[0], self.index.t_dp.center[0],
-                                self.thumb.t_mcp.center[0], self.index.t_mcp.center[0]]) - offset
+                                 self.thumb.t_mcp.center[0], self.index.t_mcp.center[0]]) - offset
             self.x_max = np.max([self.thumb.t_dp.center[0], self.index.t_dp.center[0],
-                                self.thumb.t_mcp.center[0], self.index.t_mcp.center[0]]) + offset
+                                 self.thumb.t_mcp.center[0], self.index.t_mcp.center[0]]) + offset
             # ylims
             self.y_min = np.min([self.thumb.t_dp.center[1], self.index.t_dp.center[1],
-                                self.thumb.t_mcp.center[1], self.index.t_mcp.center[1]]) - offset
+                                 self.thumb.t_mcp.center[1], self.index.t_mcp.center[1]]) - offset
             self.y_max = np.max([self.thumb.t_dp.center[1], self.index.t_dp.center[1],
-                                self.thumb.t_mcp.center[1], self.index.t_mcp.center[1]]) + offset
+                                 self.thumb.t_mcp.center[1], self.index.t_mcp.center[1]]) + offset
             # zlims
             self.z_min = np.min([self.thumb.t_dp.center[2], self.index.t_dp.center[2],
-                                self.thumb.t_mcp.center[2], self.index.t_mcp.center[2]]) - offset
+                                 self.thumb.t_mcp.center[2], self.index.t_mcp.center[2]]) - offset
             self.z_max = np.max([self.thumb.t_dp.center[2], self.index.t_dp.center[2],
-                                self.thumb.t_mcp.center[2], self.index.t_mcp.center[2]]) + offset
+                                 self.thumb.t_mcp.center[2], self.index.t_mcp.center[2]]) + offset
         else:
             self.x_min, self.x_max = -160, 40,
             self.y_min, self.y_max = 120, 320,
             self.z_min, self.z_max = -200, 0
 
-    def plot(self):
+    def plot(self, plot_extra=False):
         """plot the hand"""
         figure = plt.figure(figsize=(14, 14))
         axes = mplot3d.Axes3D(figure)
@@ -429,8 +432,8 @@ class HandMesh(object):
         self.plot_bones(axes)
 
         # plot fingers
-        self.thumb.plot(axes)
-        self.index.plot(axes)
+        self.thumb.plot(axes, plot_extra=plot_extra)
+        self.index.plot(axes, plot_extra=plot_extra)
 
         # adjust scale
         scale = self.thumb.dp.points.flatten()
@@ -535,10 +538,12 @@ def build_loc_data(data, ind, scale=1000):
     return loc_dict
 
 
-def update_all(ind, plotit=False):
+def update_all(ind, plotit=False, plot_extra=False, set_scale=False, scale=1.0):
     loc_data = build_loc_data(data, ind)
+    if set_scale:
+        hand.scale = scale
     hand.update(loc_data)
-    hand.plot() if plotit else None
+    hand.plot(plot_extra=plot_extra) if plotit else None
 
 
 # %%

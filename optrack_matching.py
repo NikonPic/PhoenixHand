@@ -154,7 +154,8 @@ class TrackerOpt(object):
         myq = Quaternion(self.quat)
         t_quat_0 = myq.rotation_matrix[:3, :3]
         t_tracker_0 = self.cosy
-        t_quat_tracker = t_quat_0 @ np.transpose(t_tracker_0)
+        t_0_tracker = np.transpose(t_tracker_0)
+        t_quat_tracker = t_quat_0 @ t_0_tracker
         self.t_q_tr = t_quat_tracker
 
     def plot(self, axes):
@@ -181,7 +182,9 @@ opttr['thumb'] = {
 
 
 # %%
+
 if __name__ == '__main__':
+
     figure = plt.figure(figsize=(14, 14))
     axes = mplot3d.Axes3D(figure)
 
@@ -199,8 +202,4 @@ if __name__ == '__main__':
     print(np.around(tr_obj.t_q_tr, decimals=2))
     print(np.linalg.det(tr_obj.t_q_tr))
 
-# %%
-x, y, z = tr_obj.t_q_tr
-# %%
-np.linalg.norm(x)
 # %%
