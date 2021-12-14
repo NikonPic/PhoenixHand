@@ -114,15 +114,14 @@ class Tracker(object):
 
     def define_scale(self):
         self.scale = self.length / self.opt_tr.length
-        print(self.scale)
 
     def define_const_rot(self):
         """define the constant rotation matrix"""
         self.t_tr_ct = self.rot_matrix
-        self.t_ct_tr = np.transpose(self.t_tr_ct)
+        self.t_ct_tr = self.t_tr_ct.T
 
         self.t_q_tr = self.opt_tr.t_q_tr
-        self.t_tr_q = np.transpose(self.t_q_tr)
+        self.t_tr_q = self.t_q_tr.T
 
     def define_all_axes(self):
         """calculate the coordinate system"""
@@ -138,13 +137,11 @@ class Tracker(object):
         # finally th z_axis
         self.z_axis = np.cross(self.x_axis, self.y_axis)
         self.z_axis = self.z_axis / np.linalg.norm(self.z_axis)
-        self.cosy = np.array([self.x_axis, self.y_axis, self.z_axis])
         self.optimize_cosy()
 
-        # finally the rotation matrix
-        self.rot_matrix = self.cosy.copy()
-        self.t_tr_ct = self.rot_matrix
-        self.t_ct_tr = np.transpose(self.rot_matrix)
+        # finally the rotation matrices
+        self.t_tr_ct = self.cosy
+        self.t_ct_tr = self.cosy.T
 
     def calculate_center(self):
         """calculate the center of the tracker"""
@@ -177,14 +174,7 @@ class Tracker(object):
         z = z / np.linalg.norm(z)
 
         self.x_axis, self.y_axis, self.z_axis = x, y, z
-        self.cosy = np.array([self.x_axis, self.y_axis, self.z_axis])
-        # use the transposed matrix, as:
-        # T_10 = [
-        #    x11, y11, z11,
-        #    x12, y12, z12,
-        #    x13, y13, z13,
-        # ]
-        self.cosy = np.transpose(self.cosy)
+        self.cosy = np.array([self.x_axis, self.y_axis, self.z_axis]).T
 
     def plot_cosys(self, axes):
         self.plot_axis(self.x_axis, axes, 'b', 5)
@@ -277,7 +267,6 @@ class Tracker(object):
         t_ct_old = self.t_ct_tr
         t_new_ct = t_tr_q @ t_q_opt @ t_opt_ct
         t_neu_old = t_tr_q @ t_q_opt @ t_opt_ct @ t_ct_old
-        t_old_neu = np.transpose(t_neu_old)
 
         # 4. return diffpos and rotation
         print(self.name)
@@ -291,7 +280,7 @@ class Tracker(object):
         print(np.around(t_neu_old, decimals=1))
 
         print('final1:')
-        self.rotate(t_old_neu, self.center)
+        self.rotate(t_neu_old.T, self.center)
         self.translate(diff_pos)
 
 
@@ -558,6 +547,18 @@ def update_all(ind, plotit=False, plot_extra=False, set_scale=False, scale=1.0):
 
 
 # %%
+
+hand = HandMesh(opttr, add_bones=False)
+t1 = hand.thumb.t_mcp.t_tr_ct.copy()
+re_rot = t1 @ t1.T
+print(re_rot)
+update_all(0)
+t1_new = hand.thumb.t_mcp.t_tr_ct.copy()
+re_rot = t1 @ t1_new.T
+print(re_rot)
+
+# %%
+
 idx = widgets.IntSlider(value=0, min=0, max=len(data.time))
 hand = HandMesh(opttr, add_bones=False)
 widgets.interact(update_all, ind=idx)

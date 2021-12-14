@@ -4,6 +4,8 @@ import numpy as np
 import json
 import matplotlib.pyplot as plt
 from dataclasses import dataclass
+from ipywidgets import widgets
+import os
 
 """
 Strecker 1 zeigerfinger: 5
@@ -56,7 +58,7 @@ class RigidBodyAssignment:
 
 class TestEvaluator():
 
-    def __init__(self, finger_a: FingerAssignment, body_a: RigidBodyAssignment, name='pincer_ft_final.json'):
+    def __init__(self, finger_a: FingerAssignment, body_a: RigidBodyAssignment, name='pincer_highscore.json'):
 
         # read the json
 
@@ -85,9 +87,11 @@ class TestEvaluator():
     def plot_rigid_bodies(self, call_name):
         """make a simple plot, containing the general quaternion and position data"""
         plt.figure(figsize=(12, 12))
+
         plt.subplot(2, 1, 1)
+        plt.title(call_name)
         rigid_b = getattr(self, call_name)
-        print(rigid_b.keys())
+
         plt.plot(self.time, rigid_b['qx'], label='qx')
         plt.plot(self.time, rigid_b['qy'], label='qy')
         plt.plot(self.time, rigid_b['qz'], label='qz')
@@ -109,13 +113,27 @@ finger_a = FingerAssignment(4, 6, 3, 2, 7, 5, 0, 1)
 body_a = RigidBodyAssignment(0, 1, 2, 3, 4)
 data = TestEvaluator(finger_a, body_a)
 
-# %%
-if __name__ == '__main__':
-    data.plot_rigid_bodies('force_torque')
+
+def read_all_files(idx):
+    filename = testfiles[idx]
+    print(filename)
+
+    finger_a = FingerAssignment(4, 6, 3, 2, 7, 5, 0, 1)
+    body_a = RigidBodyAssignment(0, 1, 2, 3, 4)
+    data = TestEvaluator(finger_a, body_a, name=filename)
+
+    # data.plot_rigid_bodies('force_torque')
     data.plot_rigid_bodies('zf_pp')
     data.plot_rigid_bodies('zf_dp')
     data.plot_rigid_bodies('daumen_dp')
     data.plot_rigid_bodies('daumen_mc')
+
+
+# %%
+if __name__ == '__main__':
+    testfiles = os.listdir('./data/test_november')
+    idx_test = widgets.IntSlider(min=0, max=len(testfiles), value=0)
+    widgets.interact(read_all_files, idx=idx_test)
 
 
 # %%
