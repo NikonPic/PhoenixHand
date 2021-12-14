@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
 from pyquaternion import Quaternion
+
 """
 Goal is to find the Transformation Matrix -> Red, Green, Blue -> Tracker System
 
@@ -125,6 +126,7 @@ class TrackerOpt(object):
 
         self.x_axis, self.y_axis, self.z_axis = x, y, z
         self.cosy = np.array([self.x_axis, self.y_axis, self.z_axis])
+        self.cosy = np.transpose(self.cosy)
 
     def plot_cosys(self, axes):
         self.plot_axis(self.x_axis, axes, 'b', 5)
@@ -168,6 +170,7 @@ optdict = {}
 for tr, sw in zip(tr_list, switches):
     tr_obj = TrackerOpt(tr, data, switch=sw)
     optdict[tr] = tr_obj
+    print(tr_obj.t_q_tr)
 
 # reassign
 opttr = {}
@@ -202,4 +205,8 @@ if __name__ == '__main__':
     print(np.around(tr_obj.t_q_tr, decimals=2))
     print(np.linalg.det(tr_obj.t_q_tr))
 
+    # %%
+    print(np.around(tr_obj.t_q_tr, decimals=2))
+    print(Quaternion._from_matrix(tr_obj.t_q_tr))
+    print(Quaternion._from_matrix(tr_obj.t_q_tr).rotation_matrix)
 # %%

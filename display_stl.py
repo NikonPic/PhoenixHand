@@ -9,6 +9,13 @@ from optrack_matching import opttr, optdict, TrackerOpt
 from ipywidgets import widgets
 
 
+def get_angle(p, q):
+    """get the angle between two rot matrices for evaluation"""
+    rot = np.dot(p, q.T)
+    theta = (np.trace(rot) - 1)/2
+    return np.arccos(theta) * (180/np.pi)
+
+
 def get_loc_sphere(loc_mesh: mesh.Mesh, vector0, min_dist):
     """get the local distances to all other points and collect the minimum values"""
     all_dist = []
@@ -68,7 +75,7 @@ def get_cog(loc_mesh: mesh.Mesh, as_mean=True):
 class Tracker(object):
     """Class to handle the tracker spheres"""
 
-    def __init__(self, path, name, finger_mesh, opt_tr: TrackerOpt, my_mesh) -> None:
+    def __init__(self, path, name, finger_mesh: mesh.Mesh, opt_tr: TrackerOpt, my_mesh: mesh.Mesh) -> None:
         super().__init__()
         self.path = path
         self.name = name
@@ -171,6 +178,13 @@ class Tracker(object):
 
         self.x_axis, self.y_axis, self.z_axis = x, y, z
         self.cosy = np.array([self.x_axis, self.y_axis, self.z_axis])
+        # use the transposed matrix, as:
+        # T_10 = [
+        #    x11, y11, z11,
+        #    x12, y12, z12,
+        #    x13, y13, z13,
+        # ]
+        self.cosy = np.transpose(self.cosy)
 
     def plot_cosys(self, axes):
         self.plot_axis(self.x_axis, axes, 'b', 5)
@@ -249,11 +263,6 @@ class Tracker(object):
         - perform updates
         - return the diff and rotation applyed
         """
-        tidx_ct_tr, tidx_tr_q, tidx_q_opt = t_ct_opt
-        t_ct_opt = tidx_ct_tr @ tidx_tr_q @ tidx_q_opt
-        tidx_tr_ct, tidx_q_tr, tidx_opt_q = np.transpose(
-            tidx_ct_tr), np.transpose(tidx_tr_q), np.transpose(tidx_q_opt)
-
         # 1. take data from loc-data
         t_opt_ct = np.transpose(t_ct_opt)
         pos = loc_data['pos']
@@ -266,27 +275,23 @@ class Tracker(object):
         # 3. calculate the difference in rotation
         t_tr_q = self.t_tr_q
         t_ct_old = self.t_ct_tr
-        t_new_ct = t_tr_q @ t_q_opt @ tidx_opt_q @ tidx_q_tr @ tidx_tr_ct
-        t_neu_old = t_tr_q @ t_q_opt @ tidx_opt_q @ tidx_q_tr @ tidx_tr_ct @ t_ct_old
-        t_ct_new = np.transpose(t_new_ct)
-
-        # why is this working...
-        # -> because the notation is: R_new = R_old * R_new
-        # -> R_trnew_ct = R_trold_ct * R_ct_trold * R_trnew_ct
-        inv_rot = t_ct_old @ t_new_ct
+        t_new_ct = t_tr_q @ t_q_opt @ t_opt_ct
+        t_neu_old = t_tr_q @ t_q_opt @ t_opt_ct @ t_ct_old
+        t_old_neu = np.transpose(t_neu_old)
 
         # 4. return diffpos and rotation
         print(self.name)
+        print('cur rot:')
+        print(np.around(self.t_tr_ct, decimals=1))
+
         print('des rot:')
-        print(np.around(t_ct_new, decimals=1))
-        print('req rot:')
+        print(np.around(t_new_ct, decimals=1))
+
+        print('req_rot:')
         print(np.around(t_neu_old, decimals=1))
 
-        # 5. apply transformation
-        # print('rot steps:')
-
         print('final1:')
-        self.rotate(inv_rot, self.center)
+        self.rotate(t_old_neu, self.center)
         self.translate(diff_pos)
 
 
@@ -449,9 +454,6 @@ class HandMesh(object):
         axes.set_ylim3d(self.y_min, self.y_max)
         axes.set_zlim3d(self.z_min, self.z_max)
 
-        # Show the plot to the screen
-        plt.show()
-
     def update(self, loc_data):
         """
         Update the Hand using the current information of the measurement
@@ -470,7 +472,7 @@ class HandMesh(object):
         # define the relevant rotation matrices
         t_ct_opt = self.get_rot_opt_to_ct(
             loc_data['index']['t_mcp']['rot_matrix'])
-        self.t_ct_opt = t_ct_opt[0] @ t_ct_opt[1] @ t_ct_opt[2]
+        self.t_ct_opt = t_ct_opt
         offset = self.get_offset_ct_opt(loc_data)
 
         # update the hand
@@ -487,9 +489,7 @@ class HandMesh(object):
         t_tr_q = self.index.t_mcp.t_tr_q
         t_ct_opt = t_ct_tr @ t_tr_q @ t_q_opt
 
-        # alternative..
-        # t_ct_opt = t_q_opt @ t_tr_q @ t_ct_tr
-        return t_ct_tr, t_tr_q, t_q_opt
+        return t_ct_opt
 
     def get_offset_ct_opt(self, loc_data: dict):
         """get the offset between opt and ct sys"""
@@ -543,34 +543,33 @@ def update_all(ind, plotit=False, plot_extra=False, set_scale=False, scale=1.0):
     if set_scale:
         hand.scale = scale
     hand.update(loc_data)
-    hand.plot(plot_extra=plot_extra) if plotit else None
+
+    t1 = hand.thumb.t_mcp.t_tr_ct
+    t2 = hand.index.t_mcp.t_tr_ct
+    print('T_D_MC')
+    print(np.around(t1, decimals=1))
+    print('T_I_MC')
+    print(np.around(t2, decimals=1))
+    print(get_angle(t1, t2))
+
+    if plotit:
+        hand.plot(plot_extra=plot_extra)
+        plt.savefig('./current.png')
 
 
 # %%
 idx = widgets.IntSlider(value=0, min=0, max=len(data.time))
 hand = HandMesh(opttr, add_bones=False)
-# hand.plot()
-update_all(0)
-
-# %%
 widgets.interact(update_all, ind=idx)
+# %%
 
-# %% init new hand
 hand = HandMesh(opttr, add_bones=False)
-loc_data = build_loc_data(data, 0)
-# %% get all required rotation matrices for mcp index only:
-t_q_opt = loc_data['index']['t_mcp']['rot_matrix']
-t_opt_q = np.transpose(t_q_opt)
-t_tr_ct = hand.index.t_mcp.t_tr_ct
-t_ct_tr = hand.index.t_mcp.t_ct_tr
-t_tr_q = hand.index.t_mcp.t_tr_q
-t_q_tr = np.transpose(t_tr_q)
-
-# %%
-# buid the required multiplication
-
-np.around(t_tr_q @ t_q_opt @ t_opt_q @ t_q_tr @ t_tr_ct @ t_ct_tr, decimals=1)
-# %%
-np.around(t_ct_tr @ t_tr_ct @ t_q_tr @ t_opt_q @ t_q_opt @ t_tr_q, decimals=1)
+t1 = hand.thumb.t_mcp.t_tr_ct
+t2 = hand.index.t_mcp.t_tr_ct
+print('T_D_MC')
+print(np.around(t1, decimals=1))
+print('T_I_MC')
+print(np.around(t2, decimals=1))
+print(get_angle(t1, t2))
 
 # %%
