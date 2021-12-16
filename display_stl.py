@@ -477,7 +477,6 @@ class HandMesh(object):
         t_ct_tr = self.index.t_mcp.t_ct_tr
         t_tr_q = self.index.t_mcp.t_tr_q
         t_ct_opt = t_ct_tr @ t_tr_q @ t_q_opt
-
         return t_ct_opt
 
     def get_offset_ct_opt(self, loc_data: dict):
@@ -543,34 +542,12 @@ def update_all(ind, plotit=False, plot_extra=False, set_scale=False, scale=1.0):
 
     if plotit:
         hand.plot(plot_extra=plot_extra)
-        plt.savefig('./current.png')
+        plt.savefig('./imaging/current.png')
 
 
 # %%
-
-hand = HandMesh(opttr, add_bones=False)
-t1 = hand.thumb.t_mcp.t_tr_ct.copy()
-re_rot = t1 @ t1.T
-print(re_rot)
-update_all(0)
-t1_new = hand.thumb.t_mcp.t_tr_ct.copy()
-re_rot = t1 @ t1_new.T
-print(re_rot)
-
-# %%
-
-idx = widgets.IntSlider(value=0, min=0, max=len(data.time))
-hand = HandMesh(opttr, add_bones=False)
-widgets.interact(update_all, ind=idx)
-# %%
-
-hand = HandMesh(opttr, add_bones=False)
-t1 = hand.thumb.t_mcp.t_tr_ct
-t2 = hand.index.t_mcp.t_tr_ct
-print('T_D_MC')
-print(np.around(t1, decimals=1))
-print('T_I_MC')
-print(np.around(t2, decimals=1))
-print(get_angle(t1, t2))
-
+if __name__ == '__main__':
+    idx = widgets.IntSlider(value=2000, min=0, max=len(data.time))
+    hand = HandMesh(opttr, add_bones=False)
+    widgets.interact(update_all, ind=idx)
 # %%

@@ -58,7 +58,7 @@ class RigidBodyAssignment:
 
 class TestEvaluator():
 
-    def __init__(self, finger_a: FingerAssignment, body_a: RigidBodyAssignment, name='pincer_highscore.json'):
+    def __init__(self, finger_a: FingerAssignment, body_a: RigidBodyAssignment, name='closeer.json'):
 
         # read the json
 
@@ -135,12 +135,6 @@ if __name__ == '__main__':
     idx_test = widgets.IntSlider(min=0, max=len(testfiles), value=0)
     widgets.interact(read_all_files, idx=idx_test)
 
-
-# %%
-if __name__ == '__main__':
-    data.obs.keys()
-
-    # %%
     data.obs['force_torques'][0].keys()
     # %%
     fx = [data.obs['force_torques'][i]['fx']
@@ -152,16 +146,18 @@ if __name__ == '__main__':
 
     f_all = [np.sqrt(fxi**2 + fyi**2 + fzi**2)
              for fxi, fyi, fzi in zip(fx, fy, fz)]
-    # %%
+
     plt.plot(fx)
     plt.plot(fy)
     plt.plot(fz)
-    # %%
+
     plt.plot(fx[0])
-    # %%
+
     plt.figure(figsize=(14, 8))
     plt.plot(data.time, f_all)
     plt.grid()
     plt.xlabel('time [s]', fontsize=16)
     plt.ylabel('pincer force [N]', fontsize=16)
-    # %%
+
+
+# %%

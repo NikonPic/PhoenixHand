@@ -2,4 +2,6 @@ numpy==1.19.5
 matplotlib==3.3.4
 pyzmq==22.0.3
 pycapnp==1.0.0
+numpy-stl
+pyquaternion
 
