@@ -102,7 +102,6 @@ action_off[0][DAUMEN_BEUGER_2_MOTOR] = DAUMEN_BEUGER_2_OFFSET
 action_off[0][DAUMEN_ABSPREITZER_1_MOTOR] = DAUMEN_ABSPREITZER_1_OFFSET
 
 
-
 action_amp = np.array([[
     # 0    1    2    3    4    5    6    7
     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
@@ -139,7 +138,6 @@ action_phase[0][DAUMEN_STRECKER_2_MOTOR] = DAUMEN_STRECKER_2_PHASE
 
 action_phase[0][DAUMEN_BEUGER_2_MOTOR] = DAUMEN_BEUGER_2_PHASE
 action_phase[0][DAUMEN_ABSPREITZER_1_MOTOR] = DAUMEN_ABSPREITZER_1_PHASE
-
 
 
 # %%
