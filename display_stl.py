@@ -254,19 +254,17 @@ class Tracker(object):
         - return the diff and rotation applyed
         """
         # 1. take data from loc-data
-        t_opt_ct = np.transpose(t_ct_opt)
         pos = loc_data['pos']
         t_q_opt = loc_data['rot_matrix']
 
         # 2. calculate the difference in position
-        new_pos = t_ct_opt @ pos * scale + offset
+        new_pos = np.array(pos) * scale  # t_ct_opt @ pos * scale + offset
         diff_pos = (new_pos - self.center)
 
         # 3. calculate the difference in rotation
         t_tr_q = self.t_tr_q
         t_ct_old = self.t_ct_tr
-        t_new_ct = t_tr_q @ t_q_opt @ t_opt_ct
-        t_neu_old = t_tr_q @ t_q_opt @ t_opt_ct @ t_ct_old
+        t_neu_opt = t_tr_q @ t_q_opt
 
         # 4. return diffpos and rotation
         print(self.name)
@@ -274,13 +272,14 @@ class Tracker(object):
         print(np.around(self.t_tr_ct, decimals=1))
 
         print('des rot:')
-        print(np.around(t_new_ct, decimals=1))
+        print(np.around(t_neu_opt, decimals=1))
 
         print('req_rot:')
-        print(np.around(t_neu_old, decimals=1))
+        print(np.around(t_neu_opt, decimals=1))
 
         print('final1:')
-        self.rotate(t_neu_old.T, self.center)
+        self.rotate(t_ct_old.T, self.center)
+        self.rotate(t_neu_opt.T, self.center)
         self.translate(diff_pos)
 
 
@@ -413,7 +412,7 @@ class HandMesh(object):
             self.z_max = np.max([self.thumb.t_dp.center[2], self.index.t_dp.center[2],
                                  self.thumb.t_mcp.center[2], self.index.t_mcp.center[2]]) + offset
         else:
-            self.x_min, self.x_max = -160, 40,
+            self.x_min, self.x_max = -300, -100,
             self.y_min, self.y_max = 120, 320,
             self.z_min, self.z_max = -200, 0
 
@@ -550,4 +549,5 @@ if __name__ == '__main__':
     idx = widgets.IntSlider(value=2000, min=0, max=len(data.time))
     hand = HandMesh(opttr, add_bones=False)
     widgets.interact(update_all, ind=idx)
+
 # %%

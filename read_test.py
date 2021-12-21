@@ -58,7 +58,7 @@ class RigidBodyAssignment:
 
 class TestEvaluator():
 
-    def __init__(self, finger_a: FingerAssignment, body_a: RigidBodyAssignment, name='closeer.json'):
+    def __init__(self, finger_a: FingerAssignment, body_a: RigidBodyAssignment, name='init_1vs1.json'):
 
         # read the json
 
