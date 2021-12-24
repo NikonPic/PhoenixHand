@@ -7,6 +7,7 @@ from pyquaternion import Quaternion
 from read_test import data
 from optrack_matching import opttr, optdict, TrackerOpt
 from ipywidgets import widgets
+import bpy
 
 
 def get_angle(p, q):
@@ -202,10 +203,14 @@ class Tracker(object):
         axes.scatter(self.cogs[2][0], self.cogs[2][1], self.cogs[2][2],
                      color='blue', alpha=alp, s=np.pi*r**2*100)
 
-    def plot(self, axes, show_raw=False):
+        cog_mesh = get_cog(self.my_mesh)
+        axes.scatter(cog_mesh[0], cog_mesh[1], cog_mesh[2],
+                     color='k', alpha=alp, s=np.pi*r**2*100)
+
+    def plot(self, axes, show_raw=False, show_mesh=False):
         """plot the trackers"""
         axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
-            self.my_mesh.vectors, color='lightblue', alpha=0.5))
+            self.my_mesh.vectors, color='lightblue', alpha=0.5)) if show_mesh else None
         self.plot_raw(axes) if show_raw else None
         self.plot_scatter(axes)
         self.plot_cosys(axes)
@@ -222,7 +227,7 @@ class Tracker(object):
         self.calculate_center()
         self.define_all_axes()
 
-    def rotate(self, rot_matrix, center):
+    def rotate(self, rot_matrix, center, verbose=False):
         """rotate the trackers"""
         self.my_mesh.rotate_using_matrix(rot_matrix, center)
         self.r_sphere.rotate_using_matrix(rot_matrix, center)
@@ -231,7 +236,8 @@ class Tracker(object):
         self.calculate_center()
         self.define_all_axes()
 
-        print(np.around(self.t_tr_ct, decimals=1))
+        if verbose:
+            print(np.around(self.t_tr_ct, decimals=1))
 
     def translate(self, diffpos):
         """translate the trackers"""
@@ -242,7 +248,7 @@ class Tracker(object):
         self.calculate_center()
         self.define_all_axes()
 
-    def update(self, t_ct_opt, offset, scale, loc_data):
+    def update(self, t_ct_opt, offset, scale, loc_data, verbose=False):
         """
         Update the finger system using the offset, the scale and the new loc_data
         loc_data : {
@@ -267,19 +273,21 @@ class Tracker(object):
         t_neu_opt = t_tr_q @ t_q_opt
 
         # 4. return diffpos and rotation
-        print(self.name)
-        print('cur rot:')
-        print(np.around(self.t_tr_ct, decimals=1))
+        if verbose:
+            print(self.name)
+            print('cur rot:')
+            print(np.around(self.t_tr_ct, decimals=1))
 
-        print('des rot:')
-        print(np.around(t_neu_opt, decimals=1))
+            print('des rot:')
+            print(np.around(t_neu_opt, decimals=1))
 
-        print('req_rot:')
-        print(np.around(t_neu_opt, decimals=1))
+            print('req_rot:')
+            print(np.around(t_neu_opt, decimals=1))
 
-        print('final1:')
-        self.rotate(t_ct_old.T, self.center)
-        self.rotate(t_neu_opt.T, self.center)
+            print('final1:')
+
+        self.rotate(t_ct_old.T, self.center, verbose=verbose)
+        self.rotate(t_neu_opt.T, self.center, verbose=verbose)
         self.translate(diff_pos)
 
 
@@ -413,7 +421,7 @@ class HandMesh(object):
                                  self.thumb.t_mcp.center[2], self.index.t_mcp.center[2]]) + offset
         else:
             self.x_min, self.x_max = -300, -100,
-            self.y_min, self.y_max = 120, 320,
+            self.y_min, self.y_max = 20, 220,
             self.z_min, self.z_max = -200, 0
 
     def plot(self, plot_extra=False):
@@ -545,9 +553,13 @@ def update_all(ind, plotit=False, plot_extra=False, set_scale=False, scale=1.0):
 
 
 # %%
+%matplotlib qt
 if __name__ == '__main__':
     idx = widgets.IntSlider(value=2000, min=0, max=len(data.time))
     hand = HandMesh(opttr, add_bones=False)
     widgets.interact(update_all, ind=idx)
 
+# %%
+hand = HandMesh(opttr, add_bones=False)
+hand.plot()
 # %%
