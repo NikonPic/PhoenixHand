@@ -1,4 +1,8 @@
 # %% show the stl files
+from moviepy.video.io.bindings import mplfig_to_npimage
+from moviepy.editor import VideoClip
+from tqdm import tqdm
+import os
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
 import numpy as np
@@ -450,6 +454,8 @@ class HandMesh(object):
         axes.set_ylim3d(self.y_min, self.y_max)
         axes.set_zlim3d(self.z_min, self.z_max)
 
+        return figure
+
     def update(self, loc_data):
         """
         Update the Hand using the current information of the measurement
@@ -539,27 +545,35 @@ def update_all(ind, plotit=False, plot_extra=False, set_scale=False, scale=1.0):
         hand.scale = scale
     hand.update(loc_data)
 
-    t1 = hand.thumb.t_mcp.t_tr_ct
-    t2 = hand.index.t_mcp.t_tr_ct
-    print('T_D_MC')
-    print(np.around(t1, decimals=1))
-    print('T_I_MC')
-    print(np.around(t2, decimals=1))
-    print(get_angle(t1, t2))
-
     if plotit:
         hand.plot(plot_extra=plot_extra)
         plt.savefig('./imaging/current.png')
 
 
+def makre_frame(t):
+    """make a frame for the hand"""
+    # t in s -> index
+    ind = int(round(t * 100))
+    loc_data = build_loc_data(data, ind)
+    hand.update(loc_data)
+    fig = hand.plot()
+    return mplfig_to_npimage(fig)
+
+
+def generate_video(fps=25, dur=10):
+    """generate a video of the hand"""
+
+    # save the frames
+    animation = VideoClip(make_frame=makre_frame, duration=dur)
+    animation.write_videofile("my_animation.mp4", fps=fps)
+
+
 # %%
-%matplotlib qt
 if __name__ == '__main__':
     idx = widgets.IntSlider(value=2000, min=0, max=len(data.time))
     hand = HandMesh(opttr, add_bones=False)
     widgets.interact(update_all, ind=idx)
 
-# %%
-hand = HandMesh(opttr, add_bones=False)
-hand.plot()
+    generate_video()
+
 # %%

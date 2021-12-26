@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from dataclasses import dataclass
 from ipywidgets import widgets
 import os
+from pyquaternion import Quaternion
 
 """
 Strecker 1 zeigerfinger: 5
@@ -83,30 +84,74 @@ class TestEvaluator():
                 print(attribute)
                 setattr(self, attribute,
                         self.obs['rigid_bodies'][getattr(self.body_a, attribute)])
+                self.inverse_quaternions(attribute)
 
-    def plot_rigid_bodies(self, call_name):
+    def inverse_quaternions(self, call_name):
+        """inverse the quaternions"""
+        rigid_b = getattr(self, call_name)
+
+        prev = np.array([1, 0, 0, 0])
+        # watch signums
+        for i, ele in enumerate(zip(rigid_b['qw'], rigid_b['qx'], rigid_b['qy'], rigid_b['qz'])):
+            w, x, y, z = ele
+            cur = np.array([w, x, y, z])
+
+            if np.linalg.norm(prev-cur) < np.linalg.norm(prev + cur):
+
+                rigid_b['qw'][i] = -w
+                rigid_b['qx'][i] = -x
+                rigid_b['qy'][i] = -y
+                rigid_b['qz'][i] = -z
+
+            prev = np.array([w, x, y, z])
+
+        # catch inverse flips
+    def inverse_quat2(self, call_name, eps=0.2):
+        rigid_b = getattr(self, call_name)
+        prev = np.array([1, 0, 0, 0])
+
+        for i, ele in enumerate(zip(rigid_b['qw'], rigid_b['qx'], rigid_b['qy'], rigid_b['qz'])):
+            w, x, y, z = ele
+            cur = np.array([w, x, y, z])
+
+            if abs(x) > eps and abs(abs(cur[1]) - abs(prev[1])) < eps and prev[1] * cur[1] < 0:
+
+                rigid_b['qw'][i] = w
+                rigid_b['qx'][i] = -x
+                rigid_b['qy'][i] = -y
+                rigid_b['qz'][i] = -z
+
+            prev = np.array([w, x, y, z])
+
+    def plot_rigid_bodies(self, call_name, pl_pos=False, lim=0):
         """make a simple plot, containing the general quaternion and position data"""
-        plt.figure(figsize=(12, 12))
+        plt.figure(figsize=(12, 6))
 
-        plt.subplot(2, 1, 1)
+        plt.subplot(2, 1, 1) if pl_pos else None
         plt.title(call_name)
         rigid_b = getattr(self, call_name)
 
-        plt.plot(self.time, rigid_b['qx'], label='qx')
-        plt.plot(self.time, rigid_b['qy'], label='qy')
-        plt.plot(self.time, rigid_b['qz'], label='qz')
-        plt.plot(self.time, rigid_b['qw'], label='qw')
+        if lim == 0:
+            lim = len(self.time)
+
+        plt.plot(self.time[:lim], rigid_b['qx'][:lim], label='qx')
+        plt.plot(self.time[:lim], rigid_b['qy'][:lim], label='qy')
+        plt.plot(self.time[:lim], rigid_b['qz'][:lim], label='qz')
+        plt.plot(self.time[:lim], rigid_b['qw'][:lim], label='qw')
         plt.grid()
-        plt.xlabel('time [s]')
         plt.ylabel('quaternion')
         plt.legend()
 
-        plt.subplot(2, 1, 2)
-        plt.plot(self.time, rigid_b['x'], label='x')
-        plt.plot(self.time, rigid_b['y'], label='y')
-        plt.plot(self.time, rigid_b['z'], label='z')
-        plt.grid()
-        plt.legend()
+        if pl_pos:
+            plt.subplot(2, 1, 2)
+            plt.plot(self.time[:lim], rigid_b['x'][:lim], label='x')
+            plt.plot(self.time[:lim], rigid_b['y'][:lim], label='y')
+            plt.plot(self.time[:lim], rigid_b['z'][:lim], label='z')
+            plt.grid()
+            plt.legend()
+            plt.ylabel('position')
+
+        plt.xlabel('time [s]')
 
 
 finger_a = FingerAssignment(4, 6, 3, 2, 7, 5, 0, 1)
@@ -114,7 +159,7 @@ body_a = RigidBodyAssignment(0, 1, 2, 3, 4)
 data = TestEvaluator(finger_a, body_a)
 
 
-def read_all_files(idx):
+def read_all_files(idx, lim=5000):
     filename = testfiles[idx]
     print(filename)
 
@@ -123,10 +168,17 @@ def read_all_files(idx):
     data = TestEvaluator(finger_a, body_a, name=filename)
 
     # data.plot_rigid_bodies('force_torque')
-    data.plot_rigid_bodies('zf_pp')
-    data.plot_rigid_bodies('zf_dp')
-    data.plot_rigid_bodies('daumen_dp')
-    data.plot_rigid_bodies('daumen_mc')
+    data.plot_rigid_bodies('zf_pp', lim=lim)
+    data.plot_rigid_bodies('zf_dp', lim=lim)
+    data.plot_rigid_bodies('daumen_dp', lim=lim)
+    data.plot_rigid_bodies('daumen_mc', lim=lim)
+
+
+def t_filt(arr, t=0.9):
+    new_arr = arr.copy()
+    for i in range(1, len(arr)):
+        new_arr[i] = (1 - t) * arr[i] + t * new_arr[i - 1]
+    return new_arr
 
 
 # %%
@@ -158,6 +210,3 @@ if __name__ == '__main__':
     plt.grid()
     plt.xlabel('time [s]', fontsize=16)
     plt.ylabel('pincer force [N]', fontsize=16)
-
-
-# %%
