@@ -183,6 +183,7 @@ def t_filt(arr, t=0.9):
 
 # %%
 if __name__ == '__main__':
+    data = TestEvaluator(finger_a, body_a, name='pincer_ft_final.json')
     testfiles = os.listdir('./data/test_november')
     idx_test = widgets.IntSlider(min=0, max=len(testfiles), value=0)
     widgets.interact(read_all_files, idx=idx_test)
@@ -205,8 +206,11 @@ if __name__ == '__main__':
 
     plt.plot(fx[0])
 
-    plt.figure(figsize=(14, 8))
-    plt.plot(data.time, f_all)
+    plt.figure()
+    plt.plot(data.time[:4400], f_all[:4400])
     plt.grid()
-    plt.xlabel('time [s]', fontsize=16)
-    plt.ylabel('pincer force [N]', fontsize=16)
+    plt.xlabel('time [s]', fontsize=14)
+    plt.ylabel('pincer force [N]', fontsize=14)
+
+
+# %%

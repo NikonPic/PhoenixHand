@@ -11,7 +11,6 @@ from pyquaternion import Quaternion
 from read_test import data
 from optrack_matching import opttr, optdict, TrackerOpt
 from ipywidgets import widgets
-import bpy
 
 
 def get_angle(p, q):
@@ -252,7 +251,7 @@ class Tracker(object):
         self.calculate_center()
         self.define_all_axes()
 
-    def update(self, t_ct_opt, offset, scale, loc_data, verbose=False):
+    def update(self, t_ct_opt, offset, scale, loc_data, verbose=False, ct_sys=False):
         """
         Update the finger system using the offset, the scale and the new loc_data
         loc_data : {
@@ -267,14 +266,31 @@ class Tracker(object):
         pos = loc_data['pos']
         t_q_opt = loc_data['rot_matrix']
 
-        # 2. calculate the difference in position
-        new_pos = np.array(pos) * scale  # t_ct_opt @ pos * scale + offset
-        diff_pos = (new_pos - self.center)
+        if ct_sys:
+            new_pos = t_ct_opt @ np.array(pos) * scale + offset
+            diff_pos = (new_pos - self.center)
 
-        # 3. calculate the difference in rotation
-        t_tr_q = self.t_tr_q
-        t_ct_old = self.t_ct_tr
-        t_neu_opt = t_tr_q @ t_q_opt
+            # 3. calculate the difference in rotation
+            t_tr_q = self.t_tr_q
+            t_ct_old = self.t_ct_tr
+            t_neu_old = t_tr_q @ t_q_opt @ t_ct_opt.T @ t_ct_old
+
+            self.rotate(t_neu_old.T, self.center, verbose=verbose)
+            self.translate(diff_pos)
+
+        else:  # use optitrack
+            # 2. calculate the difference in position
+            new_pos = np.array(pos) * scale
+            diff_pos = (new_pos - self.center)
+
+            # 3. calculate the difference in rotation
+            t_tr_q = self.t_tr_q
+            t_ct_old = self.t_ct_tr
+            t_neu_base = t_q_opt
+
+            self.rotate(t_ct_old.T, self.center, verbose=verbose)
+            self.rotate(t_neu_base.T, self.center, verbose=verbose)
+            self.translate(diff_pos)
 
         # 4. return diffpos and rotation
         if verbose:
@@ -283,16 +299,12 @@ class Tracker(object):
             print(np.around(self.t_tr_ct, decimals=1))
 
             print('des rot:')
-            print(np.around(t_neu_opt, decimals=1))
+            print(np.around(t_neu_base, decimals=1))
 
             print('req_rot:')
-            print(np.around(t_neu_opt, decimals=1))
+            print(np.around(t_neu_base, decimals=1))
 
             print('final1:')
-
-        self.rotate(t_ct_old.T, self.center, verbose=verbose)
-        self.rotate(t_neu_opt.T, self.center, verbose=verbose)
-        self.translate(diff_pos)
 
 
 class Finger(object):
@@ -322,7 +334,7 @@ class Finger(object):
         self.t_mcp = Tracker(
             self.path, f'{name} MCP', self.mcp, opttr_finger['t_mcp'], mcp_mesh)
 
-    def update(self, loc_data: dict, t_ct_opt, offset, scale):
+    def update(self, loc_data: dict, t_ct_opt, offset, scale, ct_sys=False):
         """
         update the position and rotation of the fingers by applying the optitrack data
         loc_data contains:
@@ -334,8 +346,10 @@ class Finger(object):
             't_mcp': ..
         }
         """
-        self.t_dp.update(t_ct_opt, offset, scale, loc_data['t_dp'])
-        self.t_mcp.update(t_ct_opt, offset, scale, loc_data['t_mcp'])
+        self.t_dp.update(t_ct_opt, offset, scale,
+                         loc_data['t_dp'], ct_sys=ct_sys)
+        self.t_mcp.update(t_ct_opt, offset, scale,
+                          loc_data['t_mcp'], ct_sys=ct_sys)
 
     def plot(self, axes, alp=0.5, plot_extra=False):
         """plot the finger"""
@@ -405,28 +419,15 @@ class HandMesh(object):
             axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
                 self.bones.vectors, color='gold', alpha=0.05))
 
-    def define_limits(self, offset=30, use_limits=False):
+    def define_limits(self, ct_sys=False):
         """define the limits of the hand"""
-        if use_limits:
-            # xlims
-            self.x_min = np.min([self.thumb.t_dp.center[0], self.index.t_dp.center[0],
-                                 self.thumb.t_mcp.center[0], self.index.t_mcp.center[0]]) - offset
-            self.x_max = np.max([self.thumb.t_dp.center[0], self.index.t_dp.center[0],
-                                 self.thumb.t_mcp.center[0], self.index.t_mcp.center[0]]) + offset
-            # ylims
-            self.y_min = np.min([self.thumb.t_dp.center[1], self.index.t_dp.center[1],
-                                 self.thumb.t_mcp.center[1], self.index.t_mcp.center[1]]) - offset
-            self.y_max = np.max([self.thumb.t_dp.center[1], self.index.t_dp.center[1],
-                                 self.thumb.t_mcp.center[1], self.index.t_mcp.center[1]]) + offset
-            # zlims
-            self.z_min = np.min([self.thumb.t_dp.center[2], self.index.t_dp.center[2],
-                                 self.thumb.t_mcp.center[2], self.index.t_mcp.center[2]]) - offset
-            self.z_max = np.max([self.thumb.t_dp.center[2], self.index.t_dp.center[2],
-                                 self.thumb.t_mcp.center[2], self.index.t_mcp.center[2]]) + offset
-        else:
-            self.x_min, self.x_max = -300, -100,
-            self.y_min, self.y_max = 20, 220,
-            self.z_min, self.z_max = -200, 0
+        self.y_min, self.y_max = 20, 220
+        self.z_min, self.z_max = -200, 0
+        self.x_min, self.x_max = -300, -100
+
+        if ct_sys:
+            self.x_min, self.x_max = -200, 0
+            self.z_min, self.z_max = -100, 100
 
     def plot(self, plot_extra=False):
         """plot the hand"""
@@ -449,14 +450,13 @@ class HandMesh(object):
         axes.set_ylabel('y [mm]')
         axes.set_zlabel('z [mm]')
 
-        self.define_limits()
         axes.set_xlim3d(self.x_min, self.x_max)
         axes.set_ylim3d(self.y_min, self.y_max)
         axes.set_zlim3d(self.z_min, self.z_max)
 
         return figure
 
-    def update(self, loc_data):
+    def update(self, loc_data, ct_sys=False):
         """
         Update the Hand using the current information of the measurement
         loc_data contains:
@@ -471,6 +471,8 @@ class HandMesh(object):
             'index': ..
         }
         """
+        self.define_limits(ct_sys)
+
         # define the relevant rotation matrices
         t_ct_opt = self.get_rot_opt_to_ct(
             loc_data['index']['t_mcp']['rot_matrix'])
@@ -478,8 +480,10 @@ class HandMesh(object):
         offset = self.get_offset_ct_opt(loc_data)
 
         # update the hand
-        self.thumb.update(loc_data['thumb'], t_ct_opt, offset, self.scale)
-        self.index.update(loc_data['index'], t_ct_opt, offset, self.scale)
+        self.thumb.update(loc_data['thumb'], t_ct_opt,
+                          offset, self.scale, ct_sys)
+        self.index.update(loc_data['index'], t_ct_opt,
+                          offset, self.scale, ct_sys)
 
     def get_scale(self):
         """get the scale between opt and ct sys"""
@@ -539,11 +543,11 @@ def build_loc_data(data, ind, scale=1000):
     return loc_dict
 
 
-def update_all(ind, plotit=False, plot_extra=False, set_scale=False, scale=1.0):
+def update_all(ind, plotit=False, plot_extra=False, set_scale=False, scale=1.0, ct_sys=False):
     loc_data = build_loc_data(data, ind)
     if set_scale:
         hand.scale = scale
-    hand.update(loc_data)
+    hand.update(loc_data, ct_sys=ct_sys)
 
     if plotit:
         hand.plot(plot_extra=plot_extra)
@@ -555,12 +559,12 @@ def makre_frame(t):
     # t in s -> index
     ind = int(round(t * 100))
     loc_data = build_loc_data(data, ind)
-    hand.update(loc_data)
+    hand.update(loc_data, ct_sys=True)
     fig = hand.plot()
     return mplfig_to_npimage(fig)
 
 
-def generate_video(fps=25, dur=10):
+def generate_video(fps=25, dur=5):
     """generate a video of the hand"""
 
     # save the frames
@@ -577,3 +581,4 @@ if __name__ == '__main__':
     generate_video()
 
 # %%
+handj.plot

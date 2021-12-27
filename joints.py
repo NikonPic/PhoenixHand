@@ -24,6 +24,30 @@ color_hand_joints = [[1.0, 0.0, 0.0],
                      [0.4, 0.0, 0.4], [0.6, 0.0, 0.6], [0.8, 0.0, 0.8], [1.0, 0.0, 1.0]]  # little
 
 
+def unit_vector(vector):
+    """ Returns the unit vector of the vector"""
+    return vector / np.linalg.norm(vector)
+
+
+def angle_between(v1, v2):
+    """ Returns the angle in radians between vectors 'v1' and 'v2'"""
+    v1_u = unit_vector(v1)
+    v2_u = unit_vector(v2)
+    return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
+
+
+def t_filt(arr, t=0.1):
+    """
+    :param arr:
+    :param t:
+    :return:
+    """
+    arr_filt = np.zeros(arr.shape)
+    for i in range(1, arr.shape[0]):
+        arr_filt[i] = t * arr[i] + (1 - t) * arr_filt[i - 1]
+    return arr_filt
+
+
 class HandJoints(object):
     """
     Data shape:
@@ -41,22 +65,46 @@ class HandJoints(object):
 
     def __init__(self, data) -> None:
         super().__init__()
+
         self.data = data
+        self.filter_data()
+        self.time = np.array(list(range(self.data.shape[0]-1))) / 100
+
         self.base = data[:, 0, :]
+
         self.thumb_mcp = data[:, 1, :]
         self.thumb_pip = data[:, 2, :]
         self.thumb_dip = data[:, 3, :]
-        self.index_mcp = data[:, 4, :]
-        self.index_pip = data[:, 5, :]
-        self.index_dip = data[:, 6, :]
-        self.filter_data()
+        self.thumb_tip = data[:, 4, :]
+
+        self.index_mcp = data[:, 5, :]
+        self.index_pip = data[:, 6, :]
+        self.index_dip = data[:, 7, :]
+        self.index_tip = data[:, 8, :]
+
+        self.thumb = {
+            'mcp': self.thumb_mcp,
+            'pip': self.thumb_pip,
+            'dip': self.thumb_dip,
+            'tip': self.thumb_tip
+        }
+
+        self.index = {
+            'mcp': self.index_mcp,
+            'pip': self.index_pip,
+            'dip': self.index_dip,
+            'tip': self.index_tip
+        }
+
+        self.calculate_angles('thumb')
+        self.calculate_angles('index')
 
     def filter_data(self, tfilt=0.9):
         self.data_filtered = np.zeros(self.data.shape)
         self.data_filtered[0, :, :] = self.data[0, :, :]
         for i in range(1, self.data.shape[0]):
-            self.data_filtered[i, :, :] = tfilt * self.data_filtered[i-1, :, :] +(1 - tfilt) * self.data[i, :, :]
-
+            self.data_filtered[i, :, :] = tfilt * self.data_filtered[i -
+                                                                     1, :, :] + (1 - tfilt) * self.data[i, :, :]
 
     def plot(self, ax, timestamp: int):
         ax.scatter(self.data[timestamp, 0, 0], self.data[timestamp,
@@ -80,6 +128,49 @@ class HandJoints(object):
         ax.set_xlim3d([p0[0] - rang, p0[0] + rang])
         ax.set_ylim3d([p0[1] - rang, p0[1] + rang])
         ax.set_zlim3d([p0[2] - rang, p0[2] + rang])
+
+    def calculate_angles(self, name):
+        """calculate the angles of the joints"""
+
+        finger = getattr(self, name)
+
+        mcps = []
+        pips = []
+        dips = []
+
+        for t in range(1, self.data.shape[0]):
+            v0 = finger['mcp'][t, :] - self.base[t, :]
+            v1 = finger['pip'][t, :] - finger['mcp'][t, :]
+            v2 = finger['dip'][t, :] - finger['pip'][t, :]
+            v3 = finger['tip'][t, :] - finger['dip'][t, :]
+
+            mcps.append(angle_between(v0, v1))
+            pips.append(angle_between(v1, v2))
+            dips.append(angle_between(v2, v3))
+
+        finger['mcps'] = t_filt(np.array(mcps))
+        finger['pips'] = t_filt(np.array(pips))
+        finger['dips'] = t_filt(np.array(dips))
+
+        setattr(self, name, finger)
+
+    def plot_angles(self, name):
+        finger = getattr(self, name)
+        plt.plot(self.time, finger['mcps'] * 180 / np.pi, 'r', label='mcp')
+        plt.plot(self.time, finger['pips'] * 180 / np.pi, 'g', label='pip')
+        plt.plot(self.time, finger['dips'] * 180 / np.pi, 'b', label='dip')
+        plt.grid()
+        plt.legend()
+        plt.ylabel(f'angles {name}[°]')
+
+    def plot_finger_angles(self):
+        plt.figure(figsize=(14, 14))
+        plt.subplot(2, 1, 1)
+        self.plot_angles('thumb')
+        plt.subplot(2, 1, 2)
+        self.plot_angles('index')
+        plt.xlabel('time [s]')
+        plt.show()
 
 
 idx = widgets.IntSlider(min=0, max=data.shape[0] - 1, value=0)
@@ -130,7 +221,10 @@ def draw_3d_skeleton(pose_cam_xyz):
     plt.subplots_adjust(left=-0.06, right=0.98, top=0.93,
                         bottom=-0.07, wspace=0, hspace=0)
 
+
 handj.filter_data(tfilt=0.95)
+
+
 def update(idx):
     draw_3d_skeleton(handj.data_filtered[idx, :, :])
 
@@ -140,4 +234,11 @@ widgets.interact(update, idx=idx)
 # %%
 handj.filter_data(tfilt=0.95)
 plt.plot(handj.data_filtered[:, 0, 0])
+handj.plot_finger_angles()
+
+# %%
+handj.plot_angles('index')
+plt.xlabel('time [s]', fontsize=14)
+plt.ylabel('angles index [°]', fontsize=14)
+plt.savefig('index_angles.png', dpi=300)
 # %%
