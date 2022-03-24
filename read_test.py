@@ -59,10 +59,9 @@ class RigidBodyAssignment:
 
 class TestEvaluator():
 
-    def __init__(self, finger_a: FingerAssignment, body_a: RigidBodyAssignment, name='init_1vs1.json'):
+    def __init__(self, finger_a: FingerAssignment, body_a: RigidBodyAssignment, name='pincer_highscore.json'):
 
         # read the json
-
         self.name = f'./data/test_november/{name}'
         with open(self.name, encoding='utf-8', errors='ignore') as f:
             data = json.load(f)
@@ -213,4 +212,64 @@ if __name__ == '__main__':
     plt.ylabel('pincer force [N]', fontsize=14)
 
 
+# %%
+tlim = 4400
+fs = 12
+
+name_list = [
+    'Extensor pollicis brevis',
+    'Extensor pollicis longus',
+    'Abductor pollicis longus',
+    'Flexor pollicis longus',
+    'Extensor digitorum',
+    'Extensor indicis',
+    'Flexor digitorum superficialis',
+    'Flexor digitorum profundus',
+]
+id_list = [7, 5, 0, 1, 4, 6, 2, 3]
+
+sign_list = [
+    '-',
+    '-.',
+    '--',
+    ':',
+]
+
+motor_forces = {}
+
+for loc_name, idx in zip(name_list, id_list):
+    motor_forces[loc_name] = []
+    for i in range(len(data.act)):
+        motor_forces[loc_name].append(data.act[i][0][idx])
+
+plt.figure(figsize=(8, 12))
+plt.subplot(3, 1, 1)
+for force, sty in zip(name_list[:4], sign_list):
+    plt.plot(data.time[:tlim], motor_forces[force][:tlim], sty, label=force)
+plt.grid()
+plt.legend(loc='upper right')
+plt.title('thumb', fontsize=fs)
+#plt.xlabel('time [s]', fontsize=fs)
+plt.ylabel('force [N]', fontsize=fs)
+plt.ylim([-5, 27])
+
+plt.subplot(3, 1, 2)
+for force, sty in zip(name_list[4:8], sign_list):
+    plt.plot(data.time[:tlim], motor_forces[force][:tlim], sty,  label=force)
+plt.grid()
+plt.legend(loc='upper right')
+plt.title('index finger', fontsize=fs)
+#plt.xlabel('time [s]', fontsize=fs)
+plt.ylabel('force [N]', fontsize=fs)
+plt.ylim([-5, 27])
+
+plt.subplot(3, 1, 3)
+plt.plot(data.time[:tlim], f_all[:tlim])
+plt.grid()
+plt.title('pincer grip', fontsize=fs)
+plt.xlabel('time [s]', fontsize=fs)
+plt.ylabel('force [N]', fontsize=fs)
+plt.ylim([-5, 27])
+
+# %%
 # %%

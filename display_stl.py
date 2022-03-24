@@ -351,7 +351,7 @@ class Finger(object):
         self.t_mcp.update(t_ct_opt, offset, scale,
                           loc_data['t_mcp'], ct_sys=ct_sys)
 
-    def plot(self, axes, alp=0.5, plot_extra=False):
+    def plot(self, axes, alp=0.5, plot_extra=True):
         """plot the finger"""
 
         if plot_extra:
@@ -560,7 +560,7 @@ def makre_frame(t):
     ind = int(round(t * 100))
     loc_data = build_loc_data(data, ind)
     hand.update(loc_data, ct_sys=True)
-    fig = hand.plot()
+    fig = hand.plot(plot_extra=False)
     return mplfig_to_npimage(fig)
 
 
@@ -581,4 +581,3 @@ if __name__ == '__main__':
     generate_video()
 
 # %%
-handj.plot
