@@ -75,6 +75,8 @@ class TestEvaluator():
         self.finger_a = finger_a
         self.assign_rigid_bodies()
 
+        self.clear_quaternions()
+
     def assign_rigid_bodies(self):
         """assign the rigid bodies acco to the names"""
         for attribute in dir(self.body_a):
@@ -105,22 +107,67 @@ class TestEvaluator():
             prev = np.array([w, x, y, z])
 
         # catch inverse flips
-    def inverse_quat2(self, call_name, eps=0.2):
+    def inverse_quat2(self, call_name, eps=0.1):
+        """inverse the quaternions and their jumps"""
         rigid_b = getattr(self, call_name)
-        prev = np.array([1, 0, 0, 0])
+        qx = []
+        qy = []
+        qz = []
+        qw = []
 
-        for i, ele in enumerate(zip(rigid_b['qw'], rigid_b['qx'], rigid_b['qy'], rigid_b['qz'])):
-            w, x, y, z = ele
-            cur = np.array([w, x, y, z])
+        # detect inverse jumpy
+        for (w, x, y, z) in zip(rigid_b['qw'], rigid_b['qx'], rigid_b['qy'], rigid_b['qz']):
+            q = Quaternion(w, x, y, z)
 
-            if abs(x) > eps and abs(abs(cur[1]) - abs(prev[1])) < eps and prev[1] * cur[1] < 0:
+            if call_name == 'daumen_dp':
+                if q.w > 0:
+                    q = -q
+            else:
+                if q.w < 0:
+                    q = -q
 
-                rigid_b['qw'][i] = w
-                rigid_b['qx'][i] = -x
-                rigid_b['qy'][i] = -y
-                rigid_b['qz'][i] = -z
+            qx.append(q.x)
+            qy.append(q.y)
+            qz.append(q.z)
+            qw.append(q.w)
 
-            prev = np.array([w, x, y, z])
+        qx_new = []
+        qy_new = []
+        qz_new = []
+        qw_new = []
+
+        qx_prev = qx[0]
+        qy_prev = qy[0]
+        qz_prev = qz[0]
+        qw_prev = qw[0]
+
+        # detect remaining jumps
+        for (x, y, z, w) in zip(qx, qy, qz, qw):
+            if abs(abs(qw_prev / w) - 1) > eps:
+                qx_new.append(qx_prev)
+                qy_new.append(qy_prev)
+                qz_new.append(qz_prev)
+                qw_new.append(qw_prev)
+            else:
+                qx_new.append(x)
+                qy_new.append(y)
+                qz_new.append(z)
+                qw_new.append(w)
+
+                qx_prev = x
+                qy_prev = y
+                qz_prev = z
+                qw_prev = w
+
+        # finally reassign the quaternions
+        setattr(self, call_name, {'qw': qw_new, 'qx': qx_new, 'qy': qy_new,
+                                  'qz': qz_new, 'x': rigid_b['x'], 'y': rigid_b['y'], 'z': rigid_b['z']})
+
+    def clear_quaternions(self):
+        """clear the quaternions and their jumps"""
+        for attribute in dir(self.body_a):
+            if ('_' in attribute[0]) == False:
+                self.inverse_quat2(attribute)
 
     def plot_rigid_bodies(self, call_name, pl_pos=False, lim=0):
         """make a simple plot, containing the general quaternion and position data"""
@@ -180,15 +227,10 @@ def t_filt(arr, t=0.9):
     return new_arr
 
 
-# %%
-if __name__ == '__main__':
-    data = TestEvaluator(finger_a, body_a, name='pincer_ft_final.json')
-    testfiles = os.listdir('./data/test_november')
-    idx_test = widgets.IntSlider(min=0, max=len(testfiles), value=0)
-    widgets.interact(read_all_files, idx=idx_test)
+def plot_forces_highscore():
+    """plot the force data of the highscore"""
+    data = TestEvaluator(finger_a, body_a, name='pincer_highscore.json')
 
-    data.obs['force_torques'][0].keys()
-    # %%
     fx = [data.obs['force_torques'][i]['fx']
           for i in range(len(data.obs['force_torques']))][0]
     fy = [data.obs['force_torques'][i]['fy']
@@ -199,77 +241,112 @@ if __name__ == '__main__':
     f_all = [np.sqrt(fxi**2 + fyi**2 + fzi**2)
              for fxi, fyi, fzi in zip(fx, fy, fz)]
 
-    plt.plot(fx)
-    plt.plot(fy)
-    plt.plot(fz)
+    tlim = 4400
+    fs = 12
 
-    plt.plot(fx[0])
+    name_list = [
+        'Extensor pollicis brevis',
+        'Extensor pollicis longus',
+        'Abductor pollicis longus',
+        'Flexor pollicis longus',
+        'Extensor digitorum',
+        'Extensor indicis',
+        'Flexor digitorum superficialis',
+        'Flexor digitorum profundus',
+    ]
+    id_list = [7, 5, 0, 1, 4, 6, 2, 3]
 
-    plt.figure()
-    plt.plot(data.time[:4400], f_all[:4400])
+    sign_list = [
+        '-',
+        '-.',
+        '--',
+        ':',
+    ]
+
+    motor_forces = {}
+
+    for loc_name, idx in zip(name_list, id_list):
+        motor_forces[loc_name] = []
+        for i in range(len(data.act)):
+            motor_forces[loc_name].append(data.act[i][0][idx])
+
+    plt.figure(figsize=(6, 6))
+    plt.subplot(3, 1, 1)
+    for force, sty in zip(name_list[:4], sign_list):
+        plt.plot(data.time[tmin:tlim], motor_forces[force]
+                 [tmin:tlim], sty, label=force)
     plt.grid()
-    plt.xlabel('time [s]', fontsize=14)
-    plt.ylabel('pincer force [N]', fontsize=14)
+    plt.legend(loc='upper right', ncol=2)
+    plt.ylabel('forces thumb [N]', fontsize=fs)
+    plt.ylim([-5, 40])
+
+    plt.subplot(3, 1, 2)
+    for force, sty in zip(name_list[4:8], sign_list):
+        plt.plot(data.time[tmin:tlim], motor_forces[force]
+                 [tmin:tlim], sty,  label=force)
+    plt.grid()
+    plt.legend(loc='upper right', ncol=2)
+    plt.ylabel('forces index [N]', fontsize=fs)
+    plt.ylim([-5, 40])
+
+    plt.subplot(3, 1, 3)
+    plt.plot(data.time[tmin:tlim], f_all[tmin:tlim])
+    plt.grid()
+    plt.xlabel('time [s]', fontsize=fs)
+    plt.ylabel('pincer force [N]', fontsize=fs)
+    plt.ylim([-5, 40])
+
+    return f_all
+
+
+def plot_positions():
+    """plot the position data of the highscore"""
+    data = TestEvaluator(finger_a, body_a, name='pincer_highscore.json')
+    plt.figure(figsize=(8, 8))
+    plt.tight_layout()
+    plt.subplot(2, 2, 1)
+    plt.title('thumb', fontsize=fs)
+    plt.plot(data.time[tmin:tlim], [x - data.daumen_dp['x'][tmin]
+                                    for x in data.daumen_dp['x'][tmin:tlim]], label='x')
+    plt.plot(data.time[tmin:tlim], [y - data.daumen_dp['y'][tmin]
+                                    for y in data.daumen_dp['y'][tmin:tlim]], label='y')
+    plt.plot(data.time[tmin:tlim], [z - data.daumen_dp['z'][tmin]
+                                    for z in data.daumen_dp['z'][tmin:tlim]], label='z')
+    plt.grid()
+    plt.ylim([-0.1, 0.15])
+    plt.ylabel('position [m]', fontsize=fs)
+
+    plt.subplot(2, 2, 3)
+    plt.plot(data.time[tmin:tlim], data.daumen_dp['qx'][tmin:tlim], label='qx')
+    plt.plot(data.time[tmin:tlim], data.daumen_dp['qy'][tmin:tlim], label='qy')
+    plt.plot(data.time[tmin:tlim], data.daumen_dp['qz'][tmin:tlim], label='qz')
+    plt.plot(data.time[tmin:tlim], data.daumen_dp['qw'][tmin:tlim], label='qw')
+    plt.grid()
+    plt.ylim([-1, 1])
+    plt.ylabel('quaternion', fontsize=fs)
+    plt.xlabel('time [s]', fontsize=fs)
+
+    plt.subplot(2, 2, 4)
+    plt.plot(data.time[tmin:tlim], data.zf_dp['qx'][tmin:tlim], label='qx')
+    plt.plot(data.time[tmin:tlim], data.zf_dp['qy'][tmin:tlim], label='qy')
+    plt.plot(data.time[tmin:tlim], data.zf_dp['qz'][tmin:tlim], label='qz')
+    plt.plot(data.time[tmin:tlim], data.zf_dp['qw'][tmin:tlim], label='qw')
+    plt.grid()
+    plt.ylim([-1, 1])
+    plt.xlabel('time [s]', fontsize=fs)
+    plt.legend(loc='lower right', fontsize=fs)
 
 
 # %%
+tmin = 500
 tlim = 4400
 fs = 12
+data = TestEvaluator(finger_a, body_a, name='pincer_highscore.json')
 
-name_list = [
-    'Extensor pollicis brevis',
-    'Extensor pollicis longus',
-    'Abductor pollicis longus',
-    'Flexor pollicis longus',
-    'Extensor digitorum',
-    'Extensor indicis',
-    'Flexor digitorum superficialis',
-    'Flexor digitorum profundus',
-]
-id_list = [7, 5, 0, 1, 4, 6, 2, 3]
-
-sign_list = [
-    '-',
-    '-.',
-    '--',
-    ':',
-]
-
-motor_forces = {}
-
-for loc_name, idx in zip(name_list, id_list):
-    motor_forces[loc_name] = []
-    for i in range(len(data.act)):
-        motor_forces[loc_name].append(data.act[i][0][idx])
-
-plt.figure(figsize=(8, 12))
-plt.subplot(3, 1, 1)
-for force, sty in zip(name_list[:4], sign_list):
-    plt.plot(data.time[:tlim], motor_forces[force][:tlim], sty, label=force)
-plt.grid()
-plt.legend(loc='upper right')
-plt.title('thumb', fontsize=fs)
-#plt.xlabel('time [s]', fontsize=fs)
-plt.ylabel('force [N]', fontsize=fs)
-plt.ylim([-5, 27])
-
-plt.subplot(3, 1, 2)
-for force, sty in zip(name_list[4:8], sign_list):
-    plt.plot(data.time[:tlim], motor_forces[force][:tlim], sty,  label=force)
-plt.grid()
-plt.legend(loc='upper right')
-plt.title('index finger', fontsize=fs)
-#plt.xlabel('time [s]', fontsize=fs)
-plt.ylabel('force [N]', fontsize=fs)
-plt.ylim([-5, 27])
-
-plt.subplot(3, 1, 3)
-plt.plot(data.time[:tlim], f_all[:tlim])
-plt.grid()
-plt.title('pincer grip', fontsize=fs)
-plt.xlabel('time [s]', fontsize=fs)
-plt.ylabel('force [N]', fontsize=fs)
-plt.ylim([-5, 27])
-
-# %%
-# %%
+if __name__ == '__main__':
+    f_all = plot_forces_highscore()
+    plot_positions()
+    data = TestEvaluator(finger_a, body_a, name='pincer_ft_final.json')
+    testfiles = os.listdir('./data/test_november')
+    idx_test = widgets.IntSlider(min=0, max=len(testfiles), value=0)
+    widgets.interact(read_all_files, idx=idx_test)

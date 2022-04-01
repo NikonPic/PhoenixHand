@@ -362,7 +362,7 @@ class Finger(object):
                 axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
                     self.mcp.vectors, color='darkgrey', alpha=alp))
 
-        self.t_dp.plot(axes)
+        self.t_dp.plot(axes, show_mesh=True)
         self.t_mcp.plot(axes)
 
     def rotate(self, rot_matrix, center):
@@ -431,7 +431,7 @@ class HandMesh(object):
 
     def plot(self, plot_extra=False):
         """plot the hand"""
-        figure = plt.figure(figsize=(14, 14))
+        figure = plt.figure(figsize=(8, 8))
         axes = mplot3d.Axes3D(figure)
 
         # plot surrounding bones
@@ -564,7 +564,7 @@ def makre_frame(t):
     return mplfig_to_npimage(fig)
 
 
-def generate_video(fps=25, dur=5):
+def generate_video(fps=5, dur=25):
     """generate a video of the hand"""
 
     # save the frames
