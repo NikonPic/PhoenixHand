@@ -119,12 +119,10 @@ class TestEvaluator():
         for (w, x, y, z) in zip(rigid_b['qw'], rigid_b['qx'], rigid_b['qy'], rigid_b['qz']):
             q = Quaternion(w, x, y, z)
 
-            if call_name == 'daumen_dp':
-                if q.w > 0:
-                    q = -q
-            else:
-                if q.w < 0:
-                    q = -q
+
+            if q.w < 0:
+                q = -q
+
 
             qx.append(q.x)
             qy.append(q.y)
@@ -227,7 +225,7 @@ def t_filt(arr, t=0.9):
     return new_arr
 
 
-def plot_forces_highscore():
+def plot_forces_highscore(tmin, tlim, fs=12):
     """plot the force data of the highscore"""
     data = TestEvaluator(finger_a, body_a, name='pincer_highscore.json')
 
@@ -299,9 +297,13 @@ def plot_forces_highscore():
     return f_all
 
 
-def plot_positions():
+def plot_positions(tmin, tlim, fs=12, alp_grid=0.25):
     """plot the position data of the highscore"""
     data = TestEvaluator(finger_a, body_a, name='pincer_highscore.json')
+
+    v_values = [1.7, 3.1, 4.35, 5.8, 7.5, 9.1]
+
+
     plt.figure(figsize=(8, 8))
     plt.tight_layout()
     plt.subplot(2, 2, 1)
@@ -312,16 +314,36 @@ def plot_positions():
                                     for y in data.daumen_dp['y'][tmin:tlim]], label='y')
     plt.plot(data.time[tmin:tlim], [z - data.daumen_dp['z'][tmin]
                                     for z in data.daumen_dp['z'][tmin:tlim]], label='z')
-    plt.grid()
+    
+    for x_val in v_values:
+        plt.vlines(x_val, -1, 1, linestyles='dashed', colors='k', linewidth=1, alpha=0.5)
+
+    plt.grid(alpha=alp_grid)
     plt.ylim([-0.1, 0.15])
     plt.ylabel('position [m]', fontsize=fs)
+
+    plt.subplot(2, 2, 2)
+    plt.title('index', fontsize=fs)
+    plt.plot(data.time[tmin:tlim], [x - data.zf_dp['x'][tmin]
+                                    for x in data.zf_dp['x'][tmin:tlim]], label='x')
+    plt.plot(data.time[tmin:tlim], [y - data.zf_dp['y'][tmin]
+                                    for y in data.zf_dp['y'][tmin:tlim]], label='y')
+    plt.plot(data.time[tmin:tlim], [z - data.zf_dp['z'][tmin]
+                                    for z in data.zf_dp['z'][tmin:tlim]], label='z')
+    plt.grid(alpha=alp_grid)
+    plt.ylim([-0.1, 0.15])
+    
 
     plt.subplot(2, 2, 3)
     plt.plot(data.time[tmin:tlim], data.daumen_dp['qx'][tmin:tlim], label='qx')
     plt.plot(data.time[tmin:tlim], data.daumen_dp['qy'][tmin:tlim], label='qy')
     plt.plot(data.time[tmin:tlim], data.daumen_dp['qz'][tmin:tlim], label='qz')
     plt.plot(data.time[tmin:tlim], data.daumen_dp['qw'][tmin:tlim], label='qw')
-    plt.grid()
+
+    for x_val in v_values:
+        plt.vlines(x_val, -1, 1, linestyles='dashed', colors='k', linewidth=1, alpha=0.5)
+
+    plt.grid(alpha=alp_grid)
     plt.ylim([-1, 1])
     plt.ylabel('quaternion', fontsize=fs)
     plt.xlabel('time [s]', fontsize=fs)
@@ -331,22 +353,28 @@ def plot_positions():
     plt.plot(data.time[tmin:tlim], data.zf_dp['qy'][tmin:tlim], label='qy')
     plt.plot(data.time[tmin:tlim], data.zf_dp['qz'][tmin:tlim], label='qz')
     plt.plot(data.time[tmin:tlim], data.zf_dp['qw'][tmin:tlim], label='qw')
-    plt.grid()
+    plt.grid(alpha=alp_grid)
     plt.ylim([-1, 1])
     plt.xlabel('time [s]', fontsize=fs)
     plt.legend(loc='lower right', fontsize=fs)
 
 
 # %%
-tmin = 500
-tlim = 4400
-fs = 12
-data = TestEvaluator(finger_a, body_a, name='pincer_highscore.json')
+
+
 
 if __name__ == '__main__':
-    f_all = plot_forces_highscore()
-    plot_positions()
+    tmin = 500
+    tlim = 4400
+    fs = 12
+    
+    f_all = plot_forces_highscore(tmin, tlim, fs)
+    plot_positions(tmin, tlim, fs)
     data = TestEvaluator(finger_a, body_a, name='pincer_ft_final.json')
     testfiles = os.listdir('./data/test_november')
     idx_test = widgets.IntSlider(min=0, max=len(testfiles), value=0)
     widgets.interact(read_all_files, idx=idx_test)
+
+
+# %%
+
