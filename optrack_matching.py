@@ -125,13 +125,12 @@ class TrackerOpt(object):
         z = z / np.linalg.norm(z)
 
         self.x_axis, self.y_axis, self.z_axis = x, y, z
-        self.cosy = np.array([self.x_axis, self.y_axis, self.z_axis])
-        self.cosy = np.transpose(self.cosy)
+        self.cosy = np.array([self.x_axis, self.y_axis, self.z_axis]).T
 
     def plot_cosys(self, axes):
-        self.plot_axis(self.x_axis, axes, 'b', 5)
-        self.plot_axis(self.y_axis, axes, 'r', 5)
-        self.plot_axis(self.z_axis, axes, 'g', 5)
+        self.plot_axis(self.x_axis, axes, 'r', 5)
+        self.plot_axis(self.y_axis, axes, 'g', 5)
+        self.plot_axis(self.z_axis, axes, 'b', 5)
 
         axes.text(self.center[0], self.center[1],
                   self.center[2], self.name, color='k')
@@ -159,10 +158,25 @@ class TrackerOpt(object):
         t_0_tracker = np.transpose(t_tracker_0)
         t_quat_tracker = t_quat_0 @ t_0_tracker
         self.t_q_tr = t_quat_tracker
+        self.x_q_tr = np.zeros((4, 4))
+        self.x_q_tr[:3, :3] = t_quat_tracker
+        self.x_q_tr[3, 3] = 1
 
     def plot(self, axes):
         self.plot_scatter(axes)
         self.plot_cosys(axes)
+
+    def get_4x4(self):
+        self.x_base_tr = np.zeros((4, 4))
+        self.x_base_tr[:3, :3] = self.cosy
+        self.x_base_tr[:3, 3] = self.pos
+        self.x_base_tr[3, 3] = 1
+
+    def get_inv_4x4(self):
+        self.x_tr_base = np.zeros((4, 4))
+        self.x_tr_base[:3, :3] = self.cosy.T
+        self.x_tr_base[:3, 3] = -self.cosy.T @ self.pos
+        self.x_tr_base[3, 3] = 1
 
 
 # build dict
@@ -170,7 +184,7 @@ optdict = {}
 for tr, sw in zip(tr_list, switches):
     tr_obj = TrackerOpt(tr, data, switch=sw)
     optdict[tr] = tr_obj
-    print(tr_obj.t_q_tr)
+    print(tr_obj.x_q_tr)
 
 # reassign
 opttr = {}
