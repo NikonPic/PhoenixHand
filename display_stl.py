@@ -76,6 +76,247 @@ def get_cog(loc_mesh: mesh.Mesh, as_mean=True):
         return loc_mesh.get_mass_properties()[1]
 
 
+def get_4x4_matrix(rot_mat, pos):
+    new_mat = np.zeros((4, 4))
+    new_mat[:3, :3] = rot_mat.copy()
+    new_mat[:3, 3] = pos.copy()
+    new_mat[3, 3] = 1
+    return new_mat
+
+
+def get_inv_matrix(mat):
+    rot_mat = mat[:3, :3].copy()
+    pos = mat[:3, 3].copy()
+    new_mat = np.zeros((4, 4))
+    new_mat[:3, :3] = rot_mat.copy().T
+    new_mat[:3, 3] = -rot_mat.copy().T @ pos.copy()
+    new_mat[3, 3] = 1
+    return new_mat
+
+
+class HandMesh(object):
+    """general hand class, which should handle all stl files"""
+
+    def __init__(self, opttr: dict,  add_bones=False, ) -> None:
+        """
+        opttr: dictionary with the information about the trackers and their transformations
+        """
+        super().__init__()
+        self.path = './segmentations/Segmentation'
+        self.thumb = Finger('DAU', self.path, opttr['thumb'])
+        self.index = Finger('ZF', self.path, opttr['index'], extra=True)
+
+        self.bones = None
+        if add_bones:
+            self.bones = mesh.Mesh.from_file(f'{self.path}_BONES.stl')
+
+        self.get_scale()
+        self.define_limits()
+
+    def rotate(self, rot_matrix, center):
+        """rotate the hand"""
+        self.thumb.rotate(rot_matrix, center)
+        self.index.rotate(rot_matrix, center)
+
+        if self.bones:
+            self.bones.rotate(rot_matrix, center)
+
+    def plot_bones(self, axes):
+        """plot the bones"""
+        if self.bones is not None:
+            axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
+                self.bones.vectors, color='gold', alpha=0.05))
+
+    def define_limits(self, ct_sys=True):
+        """define the limits of the hand"""
+        self.y_min, self.y_max = 20, 220
+        self.z_min, self.z_max = -200, 0
+        self.x_min, self.x_max = -300, -100
+
+        if ct_sys:
+            self.x_min, self.x_max = -200, 50
+            self.y_min, self.y_max = 100, 250
+            self.z_min, self.z_max = -200, 50
+
+    def plot(self, plot_extra=False):
+        """plot the hand"""
+        figure = plt.figure(figsize=(8, 8))
+        axes = mplot3d.Axes3D(figure)
+
+        # plot surrounding bones
+        self.plot_bones(axes)
+
+        # plot fingers
+        self.thumb.plot(axes, plot_extra=plot_extra)
+        self.index.plot(axes, plot_extra=plot_extra)
+
+        # adjust scale
+        scale = self.thumb.dp.points.flatten()
+        axes.auto_scale_xyz(scale, scale, scale)
+
+        # name axis and limit range
+        axes.set_xlabel('x [mm]')
+        axes.set_ylabel('y [mm]')
+        axes.set_zlabel('z [mm]')
+
+        axes.set_xlim3d(self.x_min, self.x_max)
+        axes.set_ylim3d(self.y_min, self.y_max)
+        axes.set_zlim3d(self.z_min, self.z_max)
+
+        return figure
+
+    def update(self, loc_data, ct_sys=False):
+        """
+        Update the Hand using the current information of the measurement
+        loc_data contains:
+        {
+            'thumb': {
+                't_dp': {
+                    'pos': [x, y, z],
+                    'rot_matrix': [3x3 rotation matrix]
+                }
+                't_mcp': ..
+            },
+            'index': ..
+        }
+        """
+        self.define_limits(ct_sys)
+
+        # define the relevant rotation matrices
+        t_ct_opt = self.get_rot_opt_to_ct(
+            loc_data['index']['t_mcp']['rot_matrix'])
+
+        self.t_ct_opt = t_ct_opt
+        offset = self.get_offset_ct_opt(loc_data)
+
+        # update the hand
+        self.thumb.update(loc_data['thumb'], t_ct_opt,
+                          offset, self.scale, ct_sys)
+        self.index.update(loc_data['index'], t_ct_opt,
+                          offset, self.scale, ct_sys)
+
+    def update_new(self, loc_data, ct_sys=True):
+        self.define_limits(ct_sys)
+        x_opt_q = self.assign_matrix(loc_data['index']['t_mcp'])
+        x_q_opt = get_inv_matrix(x_opt_q)
+
+        x_ct_tr = self.index.t_mcp.x_ct_tr
+        x_tr_q = self.index.t_mcp.x_tr_q
+        x_ct_opt = x_ct_tr @ x_tr_q @ x_q_opt
+
+        # update the hand
+        self.thumb.update_new(loc_data['thumb'], x_ct_opt)
+        self.index.update_new(loc_data['index'], x_ct_opt,)
+
+    def get_rot_opt_to_ct(self, t_opt_q):
+        """get the rotation matrix from opt sys to ct sys - using the current position of the index mcp sys"""
+        t_q_opt = t_opt_q.T
+        t_ct_tr = self.index.t_mcp.t_ct_tr
+        t_tr_q = self.index.t_mcp.t_tr_q
+        t_ct_opt = t_ct_tr @ t_tr_q @ t_q_opt
+        return t_ct_opt
+
+    def assign_matrix(self, loc_dict):
+        rot_mat = loc_dict['rot_matrix']
+        pos = loc_dict['pos']
+        return get_4x4_matrix(rot_mat, pos)
+
+    def get_scale(self):
+        """get the scale between opt and ct sys"""
+        self.scale = self.index.t_mcp.scale
+        print('SCALE: ', self.scale)
+
+    def get_offset_ct_opt(self, loc_data: dict):
+        """get the offset between opt and ct sys"""
+        offset = self.index.t_mcp.pos - \
+            self.t_ct_opt @ loc_data['index']['t_mcp']['pos'] * self.scale
+        return offset
+
+
+class Finger(object):
+    """each finger has dp, pip, mcp and two trackers"""
+
+    def __init__(self, name, path, opttr_finger: dict, extra=False) -> None:
+        super().__init__()
+        self.path = path
+        self.name = name
+
+        # phalanxes
+        self.dp = mesh.Mesh.from_file(f'{self.path}_{name} DP.stl')
+        self.pip = mesh.Mesh.from_file(f'{self.path}_{name} PIP.stl')
+        self.mcp = mesh.Mesh.from_file(f'{self.path}_{name} MCP.stl')
+
+        self.extra = extra
+        if extra:
+            self.back = mesh.Mesh.from_file(
+                f'{self.path}_{name} HANDRÜCKEN.stl')
+
+        # trackers
+        dp_mesh = self.dp
+        self.t_dp = Tracker(
+            self.path, f'{name}', self.dp, opttr_finger['t_dp'], dp_mesh)
+
+        mcp_mesh = self.back if self.extra else self.mcp
+        self.t_mcp = Tracker(
+            self.path, f'{name} MCP', self.mcp, opttr_finger['t_mcp'], mcp_mesh)
+
+    def update(self, loc_data: dict, t_ct_opt, offset, scale, ct_sys=False):
+        """
+        update the position and rotation of the fingers by applying the optitrack data
+        loc_data contains:
+        {
+            't_dp': {
+                'pos': [x, y, z],
+                'rot_matrix': [3x3 rotation matrix]
+                }
+            't_mcp': ..
+        }
+        """
+        self.t_dp.update(t_ct_opt, offset, scale,
+                         loc_data['t_dp'], ct_sys=ct_sys)
+        self.t_mcp.update(t_ct_opt, offset, scale,
+                          loc_data['t_mcp'], ct_sys=ct_sys)
+
+    def update_new(self, loc_data, x_ct_opt):
+        self.t_dp.update_new(x_ct_opt, loc_data['t_dp'])
+        self.t_mcp.update_new(x_ct_opt, loc_data['t_mcp'])
+
+    def plot(self, axes, alp=0.5, plot_extra=True):
+        """plot the finger"""
+
+        if plot_extra:
+            axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
+                self.pip.vectors, color='grey', alpha=alp))
+
+            if self.extra:
+                axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
+                    self.mcp.vectors, color='darkgrey', alpha=alp))
+
+        self.t_dp.plot(axes, show_mesh=plot_extra)
+        self.t_mcp.plot(axes)
+
+    def rotate(self, rot_matrix, center):
+        """rotate the finger"""
+        self.dp.rotate_using_matrix(rot_matrix, point=center)
+        self.pip.rotate_using_matrix(rot_matrix, point=center)
+        self.mcp.rotate_using_matrix(rot_matrix, point=center)
+
+        if self.extra:
+            self.back.rotate_using_matrix(rot_matrix, point=center)
+
+        self.t_dp.rotate(rot_matrix, center)
+        self.t_mcp.rotate(rot_matrix, center)
+
+    def translate(self, diffpos):
+        """translate the finger"""
+        self.dp.translate(diffpos)
+        self.pip.translate(diffpos)
+        self.mcp.translate(diffpos)
+
+        if self.extra:
+            self.back.translate(diffpos)
+
+
 class Tracker(object):
     """Class to handle the tracker spheres"""
 
@@ -121,11 +362,24 @@ class Tracker(object):
 
     def define_const_rot(self):
         """define the constant rotation matrix"""
-        self.t_tr_ct = self.rot_matrix
-        self.t_ct_tr = self.t_tr_ct.T
-
+        self.t_ct_tr = self.rot_matrix
+        self.t_tr_ct = self.t_ct_tr.T
         self.t_q_tr = self.opt_tr.t_q_tr
         self.t_tr_q = self.t_q_tr.T
+
+        self.x_q_tr = self.opt_tr.x_q_tr
+        self.x_tr_q = self.opt_tr.x_tr_q
+
+        # and the x_matrices
+        self.x_ct_tr = np.zeros((4, 4))
+        self.x_ct_tr[:3, :3] = self.t_ct_tr.copy()
+        self.x_ct_tr[:3, 3] = self.pos.copy()
+        self.x_ct_tr[3, 3] = 1
+
+        self.x_tr_ct = np.zeros((4, 4))
+        self.x_tr_ct[:3, :3] = self.t_tr_ct.copy()
+        self.x_tr_ct[:3, 3] = -self.t_tr_ct.copy() @ self.pos.copy()
+        self.x_tr_ct[3, 3] = 1
 
     def define_all_axes(self):
         """calculate the coordinate system"""
@@ -264,243 +518,38 @@ class Tracker(object):
         """
         # 1. take data from loc-data
         pos = loc_data['pos']
-        t_q_opt = loc_data['rot_matrix']
+        t_opt_q = loc_data['rot_matrix']
+        t_q_opt = t_opt_q.T
 
-        if ct_sys:
-            new_pos = t_ct_opt @ np.array(pos) * scale + offset
-            diff_pos = (new_pos - self.center)
+        new_pos = t_ct_opt @ np.array(pos) * scale + offset
+        diff_pos = (new_pos - self.center)
 
-            # 3. calculate the difference in rotation
-            t_tr_q = self.t_tr_q
-            t_ct_old = self.t_ct_tr
-            t_neu_old = t_tr_q @ t_q_opt @ t_ct_opt.T @ t_ct_old
+        # 3. calculate the difference in rotation
+        t_tr_q = self.t_tr_q
+        t_ct_old = self.t_ct_tr
+        t_neu_old = t_tr_q @ t_q_opt @ t_ct_opt.T @ t_ct_old
+        t_old_neu = t_neu_old.T
 
-            self.rotate(t_neu_old.T, self.center, verbose=verbose)
-            self.translate(diff_pos)
+        self.rotate(t_neu_old, self.center, verbose=verbose)
+        self.translate(diff_pos)
 
-        else:  # use optitrack
-            # 2. calculate the difference in position
-            new_pos = np.array(pos) * scale
-            diff_pos = (new_pos - self.center)
+    def update_new(self, x_t_ct_opt, loc_data):
+        x_opt_ct = get_inv_matrix(x_t_ct_opt)
+        # 1. take data from loc-data
+        pos = loc_data['pos']
+        t_opt_q = loc_data['rot_matrix']
+        x_opt_q = get_4x4_matrix(t_opt_q, pos)
+        x_q_opt = get_inv_matrix(x_opt_q)
 
-            # 3. calculate the difference in rotation
-            t_tr_q = self.t_tr_q
-            t_ct_old = self.t_ct_tr
-            t_neu_base = t_q_opt
+        x_tr_q = self.x_tr_q
+        x_ct_old = self.x_ct_tr
 
-            self.rotate(t_ct_old.T, self.center, verbose=verbose)
-            self.rotate(t_neu_base.T, self.center, verbose=verbose)
-            self.translate(diff_pos)
+        x_neu_old = x_tr_q @ x_q_opt @ x_opt_ct @ x_ct_old
+        t_neu_old = x_neu_old[:3, :3]
+        p_neu_old = x_neu_old[:3, 3]
 
-        # 4. return diffpos and rotation
-        if verbose:
-            print(self.name)
-            print('cur rot:')
-            print(np.around(self.t_tr_ct, decimals=1))
-
-            print('des rot:')
-            print(np.around(t_neu_base, decimals=1))
-
-            print('req_rot:')
-            print(np.around(t_neu_base, decimals=1))
-
-            print('final1:')
-
-
-class Finger(object):
-    """each finger has dp, pip, mcp and two trackers"""
-
-    def __init__(self, name, path, opttr_finger: dict, extra=False) -> None:
-        super().__init__()
-        self.path = path
-        self.name = name
-
-        # phalanxes
-        self.dp = mesh.Mesh.from_file(f'{self.path}_{name} DP.stl')
-        self.pip = mesh.Mesh.from_file(f'{self.path}_{name} PIP.stl')
-        self.mcp = mesh.Mesh.from_file(f'{self.path}_{name} MCP.stl')
-
-        self.extra = extra
-        if extra:
-            self.back = mesh.Mesh.from_file(
-                f'{self.path}_{name} HANDRÜCKEN.stl')
-
-        # trackers
-        dp_mesh = self.dp
-        self.t_dp = Tracker(
-            self.path, f'{name}', self.dp, opttr_finger['t_dp'], dp_mesh)
-
-        mcp_mesh = self.back if self.extra else self.mcp
-        self.t_mcp = Tracker(
-            self.path, f'{name} MCP', self.mcp, opttr_finger['t_mcp'], mcp_mesh)
-
-    def update(self, loc_data: dict, t_ct_opt, offset, scale, ct_sys=False):
-        """
-        update the position and rotation of the fingers by applying the optitrack data
-        loc_data contains:
-        {
-            't_dp': {
-                'pos': [x, y, z],
-                'rot_matrix': [3x3 rotation matrix]
-                }
-            't_mcp': ..
-        }
-        """
-        self.t_dp.update(t_ct_opt, offset, scale,
-                         loc_data['t_dp'], ct_sys=ct_sys)
-        self.t_mcp.update(t_ct_opt, offset, scale,
-                          loc_data['t_mcp'], ct_sys=ct_sys)
-
-    def plot(self, axes, alp=0.5, plot_extra=True):
-        """plot the finger"""
-
-        if plot_extra:
-            axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
-                self.pip.vectors, color='grey', alpha=alp))
-
-            if self.extra:
-                axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
-                    self.mcp.vectors, color='darkgrey', alpha=alp))
-
-        self.t_dp.plot(axes, show_mesh=True)
-        self.t_mcp.plot(axes)
-
-    def rotate(self, rot_matrix, center):
-        """rotate the finger"""
-        self.dp.rotate_using_matrix(rot_matrix, point=center)
-        self.pip.rotate_using_matrix(rot_matrix, point=center)
-        self.mcp.rotate_using_matrix(rot_matrix, point=center)
-
-        if self.extra:
-            self.back.rotate_using_matrix(rot_matrix, point=center)
-
-        self.t_dp.rotate(rot_matrix, center)
-        self.t_mcp.rotate(rot_matrix, center)
-
-    def translate(self, diffpos):
-        """translate the finger"""
-        self.dp.translate(diffpos)
-        self.pip.translate(diffpos)
-        self.mcp.translate(diffpos)
-
-        if self.extra:
-            self.back.translate(diffpos)
-
-
-class HandMesh(object):
-    """general hand class, which should handle all stl files"""
-
-    def __init__(self, opttr: dict,  add_bones=False, ) -> None:
-        """
-        opttr: dictionary with the information about the trackers and their transformations
-        """
-        super().__init__()
-        self.path = './segmentations/Segmentation'
-        self.thumb = Finger('DAU', self.path, opttr['thumb'])
-        self.index = Finger('ZF', self.path, opttr['index'], extra=True)
-
-        self.bones = None
-        if add_bones:
-            self.bones = mesh.Mesh.from_file(f'{self.path}_BONES.stl')
-
-        self.get_scale()
-
-    def rotate(self, rot_matrix, center):
-        """rotate the hand"""
-        self.thumb.rotate(rot_matrix, center)
-        self.index.rotate(rot_matrix, center)
-
-        if self.bones:
-            self.bones.rotate(rot_matrix, center)
-
-    def plot_bones(self, axes):
-        """plot the bones"""
-        if self.bones is not None:
-            axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
-                self.bones.vectors, color='gold', alpha=0.05))
-
-    def define_limits(self, ct_sys=False):
-        """define the limits of the hand"""
-        self.y_min, self.y_max = 20, 220
-        self.z_min, self.z_max = -200, 0
-        self.x_min, self.x_max = -300, -100
-
-        if ct_sys:
-            self.x_min, self.x_max = -200, 0
-            self.z_min, self.z_max = -100, 100
-
-    def plot(self, plot_extra=False):
-        """plot the hand"""
-        figure = plt.figure(figsize=(8, 8))
-        axes = mplot3d.Axes3D(figure)
-
-        # plot surrounding bones
-        self.plot_bones(axes)
-
-        # plot fingers
-        self.thumb.plot(axes, plot_extra=plot_extra)
-        self.index.plot(axes, plot_extra=plot_extra)
-
-        # adjust scale
-        scale = self.thumb.dp.points.flatten()
-        axes.auto_scale_xyz(scale, scale, scale)
-
-        # name axis and limit range
-        axes.set_xlabel('x [mm]')
-        axes.set_ylabel('y [mm]')
-        axes.set_zlabel('z [mm]')
-
-        axes.set_xlim3d(self.x_min, self.x_max)
-        axes.set_ylim3d(self.y_min, self.y_max)
-        axes.set_zlim3d(self.z_min, self.z_max)
-
-        return figure
-
-    def update(self, loc_data, ct_sys=False):
-        """
-        Update the Hand using the current information of the measurement
-        loc_data contains:
-        {
-            'thumb': {
-                't_dp': {
-                    'pos': [x, y, z],
-                    'rot_matrix': [3x3 rotation matrix]
-                }
-                't_mcp': ..
-            },
-            'index': ..
-        }
-        """
-        self.define_limits(ct_sys)
-
-        # define the relevant rotation matrices
-        t_ct_opt = self.get_rot_opt_to_ct(
-            loc_data['index']['t_mcp']['rot_matrix'])
-        self.t_ct_opt = t_ct_opt
-        offset = self.get_offset_ct_opt(loc_data)
-
-        # update the hand
-        self.thumb.update(loc_data['thumb'], t_ct_opt,
-                          offset, self.scale, ct_sys)
-        self.index.update(loc_data['index'], t_ct_opt,
-                          offset, self.scale, ct_sys)
-
-    def get_scale(self):
-        """get the scale between opt and ct sys"""
-        self.scale = self.index.t_mcp.scale
-
-    def get_rot_opt_to_ct(self, t_q_opt):
-        """get the rotation matrix from opt sys to ct sys - using the current position of the index mcp sys"""
-        t_ct_tr = self.index.t_mcp.t_ct_tr
-        t_tr_q = self.index.t_mcp.t_tr_q
-        t_ct_opt = t_ct_tr @ t_tr_q @ t_q_opt
-        return t_ct_opt
-
-    def get_offset_ct_opt(self, loc_data: dict):
-        """get the offset between opt and ct sys"""
-        offset = self.index.t_mcp.pos - \
-            self.t_ct_opt @ loc_data['index']['t_mcp']['pos'] * self.scale
-        return offset
+        self.rotate(t_neu_old, self.center)
+        self.translate(p_neu_old)
 
 
 def get_base_matrix(data, name, ind, scale=1):
@@ -543,10 +592,19 @@ def build_loc_data(data, ind, scale=1000):
     return loc_dict
 
 
-def update_all(ind, plotit=False, plot_extra=False, set_scale=False, scale=1.0, ct_sys=False):
+def update_all(ind, plotit=True, plot_extra=False, set_scale=False, scale=1.0, ct_sys=True):
     loc_data = build_loc_data(data, ind)
     if set_scale:
         hand.scale = scale
+
+    hand = HandMesh(opttr, add_bones=False)
+    hand.update_new(loc_data, ct_sys=ct_sys)
+
+    if plotit:
+        hand.plot(plot_extra=plot_extra)
+        plt.savefig('./imaging/current.png')
+
+    hand = HandMesh(opttr, add_bones=False)
     hand.update(loc_data, ct_sys=ct_sys)
 
     if plotit:
@@ -576,8 +634,12 @@ def generate_video(fps=5, dur=25):
 if __name__ == '__main__':
     idx = widgets.IntSlider(value=2000, min=0, max=len(data.time))
     hand = HandMesh(opttr, add_bones=False)
-    widgets.interact(update_all, ind=idx)
+    fig = hand.plot(plot_extra=False)
 
-    generate_video()
+
+# %%
+widgets.interact(update_all, ind=idx)
+
+# generate_video()
 
 # %%

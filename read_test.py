@@ -212,10 +212,11 @@ def read_all_files(idx, lim=5000):
     data = TestEvaluator(finger_a, body_a, name=filename)
 
     # data.plot_rigid_bodies('force_torque')
-    data.plot_rigid_bodies('zf_pp', lim=lim)
-    data.plot_rigid_bodies('zf_dp', lim=lim)
-    data.plot_rigid_bodies('daumen_dp', lim=lim)
-    data.plot_rigid_bodies('daumen_mc', lim=lim)
+    #data.plot_rigid_bodies('zf_pp', lim=lim)
+    #data.plot_rigid_bodies('zf_dp', lim=lim)
+    #data.plot_rigid_bodies('daumen_dp', lim=lim)
+    #data.plot_rigid_bodies('daumen_mc', lim=lim)
+    plot_forces_highscore(data, 500, 4400)
 
 
 def t_filt(arr, t=0.9):
@@ -225,9 +226,9 @@ def t_filt(arr, t=0.9):
     return new_arr
 
 
-def plot_forces_highscore(tmin, tlim, fs=12):
+def plot_forces_highscore(data, tmin, tlim, fs=12):
     """plot the force data of the highscore"""
-    data = TestEvaluator(finger_a, body_a, name='pincer_highscore.json')
+    #data = TestEvaluator(finger_a, body_a, name='pincer_ft_final.json')
 
     fx = [data.obs['force_torques'][i]['fx']
           for i in range(len(data.obs['force_torques']))][0]
@@ -274,7 +275,7 @@ def plot_forces_highscore(tmin, tlim, fs=12):
         plt.plot(data.time[tmin:tlim], motor_forces[force]
                  [tmin:tlim], sty, label=force)
     plt.grid()
-    plt.legend(loc='upper right', ncol=2)
+    plt.legend(loc='upper right', ncol=2,fontsize=fs-4)
     plt.ylabel('forces thumb [N]', fontsize=fs)
     plt.ylim([-5, 40])
 
@@ -283,16 +284,17 @@ def plot_forces_highscore(tmin, tlim, fs=12):
         plt.plot(data.time[tmin:tlim], motor_forces[force]
                  [tmin:tlim], sty,  label=force)
     plt.grid()
-    plt.legend(loc='upper right', ncol=2)
+    plt.legend(loc='upper right', ncol=2, fontsize=fs-4)
     plt.ylabel('forces index [N]', fontsize=fs)
     plt.ylim([-5, 40])
 
     plt.subplot(3, 1, 3)
-    plt.plot(data.time[tmin:tlim], f_all[tmin:tlim])
+    f_0 = np.mean(f_all[0:100])
+    plt.plot(data.time[tmin:tlim], f_all[tmin:tlim] - f_0)
     plt.grid()
     plt.xlabel('time [s]', fontsize=fs)
-    plt.ylabel('pincer force [N]', fontsize=fs)
-    plt.ylim([-5, 40])
+    plt.ylabel('tweezer force [N]', fontsize=fs)
+    #plt.ylim([-1.25, 10])
 
     return f_all
 
@@ -367,10 +369,10 @@ if __name__ == '__main__':
     tmin = 500
     tlim = 4400
     fs = 12
-    
-    f_all = plot_forces_highscore(tmin, tlim, fs)
+       
     plot_positions(tmin, tlim, fs)
-    data = TestEvaluator(finger_a, body_a, name='pincer_ft_final.json')
+    data = TestEvaluator(finger_a, body_a, name='pincer_and_ft.json')
+    f_all = plot_forces_highscore(data, tmin, tlim, fs)
     testfiles = os.listdir('./data/test_november')
     idx_test = widgets.IntSlider(min=0, max=len(testfiles), value=0)
     widgets.interact(read_all_files, idx=idx_test)

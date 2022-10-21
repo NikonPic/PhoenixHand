@@ -47,7 +47,7 @@ class TrackerOpt(object):
         for tr_d, tr_app in zip(tr_data, tr_appd):
             setattr(self, tr_d, get_m(data, name + tr_app))
         self.name = name
-        self.quat = [self.qx, self.qy, self.qz, self.qw]
+        self.quat = [self.qw, self.qx, self.qy, self.qz]
         self.pos = [self.x, self.y, self.z]
 
         self.cogs = []
@@ -125,8 +125,7 @@ class TrackerOpt(object):
         z = z / np.linalg.norm(z)
 
         self.x_axis, self.y_axis, self.z_axis = x, y, z
-        self.cosy = np.array([self.x_axis, self.y_axis, self.z_axis])
-        self.cosy = np.transpose(self.cosy)
+        self.cosy = np.array([self.x_axis, self.y_axis, self.z_axis]).T
 
     def plot_cosys(self, axes):
         self.plot_axis(self.x_axis, axes, 'b', 5)
@@ -154,11 +153,20 @@ class TrackerOpt(object):
     def get_transformation_from_tracker_to_quat_sys(self):
         """Calculate the Transformation from the tracker to the actual quaternion system"""
         myq = Quaternion(self.quat)
-        t_quat_0 = myq.rotation_matrix[:3, :3]
+        t_0_quat = myq.rotation_matrix[:3, :3]
+        t_quat_0 = t_0_quat.T
         t_tracker_0 = self.cosy
         t_0_tracker = np.transpose(t_tracker_0)
         t_quat_tracker = t_quat_0 @ t_0_tracker
         self.t_q_tr = t_quat_tracker
+
+        self.x_q_tr = np.zeros((4, 4))
+        self.x_q_tr[:3, :3] = t_quat_tracker
+        self.x_q_tr[3, 3] = 1
+
+        self.x_tr_q = np.zeros((4, 4))
+        self.x_tr_q[:3, :3] = t_quat_tracker.T
+        self.x_tr_q[3, 3] = 1
 
     def plot(self, axes):
         self.plot_scatter(axes)
