@@ -128,11 +128,11 @@ class Tracker(object):
         self.t_tr_q = self.t_q_tr.T
 
         self.x_q_tr = np.zeros((4, 4))
-        self.x_q_tr[:3, :3] = self.t_q_tr
+        self.x_q_tr[:3, :3] = self.t_q_tr.copy()
         self.x_q_tr[3, 3] = 1
 
         self.x_tr_q = np.zeros((4, 4))
-        self.x_tr_q[:3, :3] = self.t_tr_q
+        self.x_tr_q[:3, :3] = self.t_tr_q.copy()
         self.x_tr_q[3, 3] = 1
 
     def define_all_axes(self):
@@ -146,7 +146,7 @@ class Tracker(object):
         self.y_axis = self.cogs[0] - midpoint  # from midpoint to red
         self.y_axis = self.y_axis / np.linalg.norm(self.y_axis)
 
-        # finally th z_axis
+        # finally the z_axis
         self.z_axis = np.cross(self.x_axis, self.y_axis)
         self.z_axis = self.z_axis / np.linalg.norm(self.z_axis)
         self.optimize_cosy()
@@ -192,9 +192,9 @@ class Tracker(object):
         self.cosy = np.array([self.x_axis, self.y_axis, self.z_axis]).T
 
     def plot_cosys(self, axes):
-        self.plot_axis(self.x_axis, axes, 'r', 5)
-        self.plot_axis(self.y_axis, axes, 'g', 5)
-        self.plot_axis(self.z_axis, axes, 'b', 5)
+        self.plot_axis(self.x_axis, axes, 'b', 5)
+        self.plot_axis(self.y_axis, axes, 'r', 5)
+        self.plot_axis(self.z_axis, axes, 'g', 5)
 
         axes.text(self.center[0], self.center[1],
                   self.center[2], self.name, color='k')
@@ -264,15 +264,15 @@ class Tracker(object):
 
     def get_4x4(self):
         x_base_tr = np.zeros((4, 4))
-        x_base_tr[:3, :3] = self.cosy
-        x_base_tr[:3, 3] = self.pos
+        x_base_tr[:3, :3] = self.cosy.copy()
+        x_base_tr[:3, 3] = self.pos.copy()
         x_base_tr[3, 3] = 1
         return x_base_tr
 
     def get_inv_4x4(self):
         x_tr_base = np.zeros((4, 4))
-        x_tr_base[:3, :3] = self.cosy.T
-        x_tr_base[:3, 3] = -self.cosy.T @ self.pos
+        x_tr_base[:3, :3] = self.cosy.copy().T
+        x_tr_base[:3, 3] = -self.cosy.copy().T @ self.pos.copy()
         x_tr_base[3, 3] = 1
         return x_tr_base
 
@@ -357,7 +357,7 @@ class Finger(object):
                 axes.add_collection3d(mplot3d.art3d.Poly3DCollection(
                     self.mcp.vectors, color='darkgrey', alpha=alp))
 
-        self.t_dp.plot(axes, show_mesh=True)
+        self.t_dp.plot(axes, show_mesh=False)
         self.t_mcp.plot(axes)
 
     def rotate(self, rot_matrix, center):
@@ -399,6 +399,7 @@ class HandMesh(object):
             self.bones = mesh.Mesh.from_file(f'{self.path}_BONES.stl')
 
         self.get_scale()
+        self.define_limits()
 
     def rotate(self, rot_matrix, center):
         """rotate the hand"""
@@ -416,9 +417,9 @@ class HandMesh(object):
 
     def define_limits(self, ct_sys=False):
         """define the limits of the hand"""
-        self.y_min, self.y_max = -100, 200
-        self.z_min, self.z_max = -200, 40
-        self.x_min, self.x_max = -300, -100
+        self.y_min, self.y_max = 0, 300
+        self.z_min, self.z_max = -200, 100
+        self.x_min, self.x_max = -200, 100
 
         if ct_sys:
             self.x_min, self.x_max = -200, 200
@@ -493,10 +494,6 @@ class HandMesh(object):
         x_tr_q = self.index.t_mcp.x_tr_q
         x_q_opt = make_inverse(x_opt_q)
         x_ct_opt = x_ct_tr @ x_tr_q @ x_q_opt
-
-        print('x_opt_q')
-        print(np.round(x_ct_opt, decimals=3))
-
         return x_ct_opt
 
     def get_offset_ct_opt(self, loc_data: dict):
@@ -510,8 +507,8 @@ def make_inverse(mat: np.ndarray):
     new_mat = np.zeros((4, 4))
     rot_mat = mat[:3, :3].copy()
     pos = mat[:3, 3].copy()
-    new_mat[:3, :3] = rot_mat.T
-    new_mat[:3, 3] = - rot_mat.T @ pos
+    new_mat[:3, :3] = rot_mat.T.copy()
+    new_mat[:3, 3] = -rot_mat.T.copy() @ pos.copy()
     new_mat[3, 3] = 1
     return new_mat
 
@@ -525,8 +522,8 @@ def get_base_matrix(data, name, ind, scale=1):
     pos = [x[ind] * scale, y[ind] * scale, z[ind]*scale]
 
     x_base_system = np.zeros((4, 4))
-    x_base_system[:3, :3] = q.rotation_matrix
-    x_base_system[:3, 3] = pos
+    x_base_system[:3, :3] = q.rotation_matrix.copy()
+    x_base_system[:3, 3] = pos.copy()
     x_base_system[3, 3] = 1
 
     return x_base_system
@@ -580,9 +577,10 @@ def generate_video(fps=2, dur=25):
 
 # %%
 if __name__ == '__main__':
-    %matplotlib qt
+    # %matplotlib qt
     idx = widgets.IntSlider(value=2000, min=0, max=len(data.time))
     hand = HandMesh(opttr, add_bones=False)
+    hand.plot(plot_extra=False)
     widgets.interact(update_all, ind=idx)
 
     # generate_video()

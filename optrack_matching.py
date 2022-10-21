@@ -46,9 +46,13 @@ class TrackerOpt(object):
 
         for tr_d, tr_app in zip(tr_data, tr_appd):
             setattr(self, tr_d, get_m(data, name + tr_app))
+
+        print(self.qw, self.qx, self.qy, self.qz)
         self.name = name
-        self.quat = [self.qx, self.qy, self.qz, self.qw]
+        self.quat = [self.qw, self.qx, self.qy, self.qz]
         self.pos = [self.x, self.y, self.z]
+
+        print(Quaternion(self.quat).rotation_matrix)
 
         self.cogs = []
         for marker in markers:
@@ -128,9 +132,9 @@ class TrackerOpt(object):
         self.cosy = np.array([self.x_axis, self.y_axis, self.z_axis]).T
 
     def plot_cosys(self, axes):
-        self.plot_axis(self.x_axis, axes, 'r', 5)
-        self.plot_axis(self.y_axis, axes, 'g', 5)
-        self.plot_axis(self.z_axis, axes, 'b', 5)
+        self.plot_axis(self.x_axis, axes, 'b', 5)
+        self.plot_axis(self.y_axis, axes, 'r', 5)
+        self.plot_axis(self.z_axis, axes, 'g', 5)
 
         axes.text(self.center[0], self.center[1],
                   self.center[2], self.name, color='k')
@@ -153,13 +157,15 @@ class TrackerOpt(object):
     def get_transformation_from_tracker_to_quat_sys(self):
         """Calculate the Transformation from the tracker to the actual quaternion system"""
         myq = Quaternion(self.quat)
+
         t_quat_0 = myq.rotation_matrix[:3, :3]
         t_tracker_0 = self.cosy
         t_0_tracker = np.transpose(t_tracker_0)
         t_quat_tracker = t_quat_0 @ t_0_tracker
-        self.t_q_tr = t_quat_tracker
+
+        self.t_q_tr = t_quat_tracker.copy()
         self.x_q_tr = np.zeros((4, 4))
-        self.x_q_tr[:3, :3] = t_quat_tracker
+        self.x_q_tr[:3, :3] = t_quat_tracker.copy()
         self.x_q_tr[3, 3] = 1
 
     def plot(self, axes):
@@ -168,14 +174,14 @@ class TrackerOpt(object):
 
     def get_4x4(self):
         self.x_base_tr = np.zeros((4, 4))
-        self.x_base_tr[:3, :3] = self.cosy
-        self.x_base_tr[:3, 3] = self.pos
+        self.x_base_tr[:3, :3] = self.cosy.copy()
+        self.x_base_tr[:3, 3] = self.pos.copy()
         self.x_base_tr[3, 3] = 1
 
     def get_inv_4x4(self):
         self.x_tr_base = np.zeros((4, 4))
-        self.x_tr_base[:3, :3] = self.cosy.T
-        self.x_tr_base[:3, 3] = -self.cosy.T @ self.pos
+        self.x_tr_base[:3, :3] = self.cosy.T.copy()
+        self.x_tr_base[:3, 3] = -self.cosy.T.copy() @ self.pos.copy()
         self.x_tr_base[3, 3] = 1
 
 
@@ -184,7 +190,6 @@ optdict = {}
 for tr, sw in zip(tr_list, switches):
     tr_obj = TrackerOpt(tr, data, switch=sw)
     optdict[tr] = tr_obj
-    print(tr_obj.x_q_tr)
 
 # reassign
 opttr = {}
