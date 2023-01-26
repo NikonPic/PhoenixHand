@@ -8,9 +8,12 @@ from mpl_toolkits import mplot3d
 import numpy as np
 from stl import mesh
 from pyquaternion import Quaternion
+from ipywidgets import widgets
+
+
 from read_test import data
 from optrack_matching import opttr, optdict, TrackerOpt
-from ipywidgets import widgets
+
 
 
 def get_angle(p, q):
