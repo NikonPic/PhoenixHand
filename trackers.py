@@ -2,10 +2,10 @@
 import math
 import csv
 import json
-import pandas as pd
 import numpy as np
 import torch
 from pyquaternion.quaternion import Quaternion
+from datasplit import ObservationHandler
 
 
 def return_sorted_points(points1, points2):
@@ -166,6 +166,8 @@ class Tracker(object):
             # define a test scenario
             self.perform_test()
 
+        self.t_ct_tr = self.t_ct_def
+
     def perform_test(self):
         """function to perform the test
         # take the 
@@ -187,15 +189,14 @@ class Tracker(object):
         self.marker_pos_ct = points
         _, self.marker_pos_ct = return_sorted_points(
             self.marker_pos_def, self.marker_pos_ct)
-        t_ct_def = self.calculate_transformation_matrix()
-        print(t_ct_def)
-        t_def_ct = np.linalg.inv(np.array(t_ct_def))
-        print(t_def_ct)
+        _ = self.calculate_transformation_matrix()
+        print(np.round(self.t_ct_def, decimals=4))
+        print(np.round(self.t_def_ct, decimals=4))
 
     def read_ctdata(self):
         """read the data of the marker points from the ct scan"""
         # 1. load mounting points
-        with open(f'{self.ctname}.mrk.json') as jsonfile:
+        with open(self.ctname) as jsonfile:
             data = json.load(jsonfile)
         # extract point infos
         point_data = data['markups'][0]['controlPoints']
@@ -204,7 +205,7 @@ class Tracker(object):
     def read_markerdata(self):
         """read the data from the csv file"""
         coordinates = []
-        with open(f'trackers/{self.defname}', 'r') as file:
+        with open(self.defname, 'r') as file:
             reader = csv.reader(file)
             next(reader)  # Skip the first row (header)
             next(reader)  # Skip the second row (version)
@@ -219,8 +220,8 @@ class Tracker(object):
 
     def calculate_transformation_matrix(self):
         """the required tranformation matrix between system 1 and 2"""
-        markers1 = self.marker_pos_def
-        markers2 = self.marker_pos_ct
+        markers2 = self.marker_pos_def
+        markers1 = self.marker_pos_ct
 
         # Convert lists of markers to arrays
         markers1 = np.array(markers1)
@@ -240,6 +241,7 @@ class Tracker(object):
 
         # Calculate the rotation matrix
         R = np.dot(U, V_T)
+        self.R = R
 
         # Check for reflection
         if np.linalg.det(R) < 0:
@@ -248,6 +250,7 @@ class Tracker(object):
 
         # Calculate the translation vector
         t = markers1_mean - np.dot(markers2_mean, R)
+        self.t = t
 
         # Concatenate the rotation and translation matrices
         transformation_matrix = np.eye(4)
@@ -256,10 +259,153 @@ class Tracker(object):
         """
         This matrix points FROM def TO ct
         """
+        self.t_ct_def = transformation_matrix
+        self.get_inverse()
         return transformation_matrix
+
+    def get_inverse(self):
+        transformation_matrix = np.eye(4)
+        transformation_matrix[:3, :3] = self.R.T
+        transformation_matrix[:3, 3] = - self.R.T @ self.t
+        self.t_def_ct = transformation_matrix
 
 
 # %%
-tr = Tracker(0, '51k.csv')
 
+class TrackerHandler(object):
+    """
+    This class should get a dicitonary of all tracker-paths
+    then load the trackers and calculate the transformations based on the tracker list
+    We have 5 trackers: we assume the are named and sorted as follows:
+        -> Tracker 0: zf_mcp  -> trackers_def/{name}.csv -> trackers_ct/{name}.mrk.json
+        -> Tracker 1: zf_dip  -> ""
+        -> Tracker 2: dau_mcp -> ""
+        -> Tracker 3: dau_dip -> ""
+        -> Tracker 4: ft      -> ""
+    """
+
+    def __init__(self, path='../', def_path='trackers_def', ct_path='trackers_ct') -> None:
+        """load all trackers and calculate their basic transformations"""
+        def_path = f'{path}/{def_path}'
+        ct_path = f'{path}/{ct_path}'
+
+        # assign positions of the trackers in obshandler
+        self.pos_zfmcp = 0
+        self.pos_zfdip = 1
+        self.pos_daumcp = 2
+        self.pos_daudip = 3
+        self.pos_ft = 4
+
+        # initialise all trackers
+        # index
+        self.zf_mcp = Tracker(f'{def_path}/zf_mcp.csv',
+                              f'{ct_path}/zf_mcp.mrk.json')
+        self.zf_dip = Tracker(f'{def_path}/zf_dip.csv',
+                              f'{ct_path}/zf_dip.mrk.json')
+
+        # thumb
+        self.dau_mcp = Tracker(
+            f'{def_path}/dau_mcp.csv', f'{ct_path}/dau_mcp.mrk.json')
+        self.dau_dip = Tracker(
+            f'{def_path}/dau_dip.csv', f'{ct_path}/dau_dip.mrk.json')
+
+        # ft
+        self.ft = Tracker(f'{def_path}/ft.csv', f'{ct_path}/ft.mrk.json')
+
+        self.t_ct_zfmcp = self.zf_mcp.t_ct_tr
+        self.t_ct_zfdip = self.zf_dip.t_ct_tr
+        self.t_ct_daumcp = self.dau_mcp.t_ct_tr
+        self.t_ct_daudip = self.dau_dip.t_ct_tr
+        self.t_ct_ft = self.ft.t_ct_tr
+
+    def __call__(self, obs_handler: ObservationHandler):
+        """
+        Idea: take the data from the observationhandler and assign the current observation-data to the sensors
+        -> each object should have a transformation, that shows the path FROM the Tracker TO the Base Tracker.
+        The Base Tracker is ZF_MCP
+        Example:
+        T_CT_DAUDP = T_CT_ZFMCP * T_ZFMCP_OPT(t) * T_OPT_DAUDP(t)
+        """
+
+        # get the current transformations:
+        t_opt_zfmcp = obs_handler.rigid_bodies[self.pos_zfmcp]._tmat
+        t_opt_zfdip = obs_handler.rigid_bodies[self.pos_zfdip]._tmat
+        t_opt_daumcp = obs_handler.rigid_bodies[self.pos_daumcp]._tmat
+        t_opt_daudip = obs_handler.rigid_bodies[self.pos_daudip]._tmat
+        t_opt_ft = obs_handler.rigid_bodies[self.pos_ft]._tmat
+
+        # precalculate some transformations for better notation -> how to go from opt to ct?
+        t_zfmcp_opt = np.linalg.inv(t_opt_zfmcp)
+        t_ct_zfmcp = self.zf_mcp.t_ct_tr
+        t_ct_opt = t_ct_zfmcp @ t_zfmcp_opt
+
+        # calculate all required transformations
+        self.t_ct_zfmcp = self.zf_mcp.t_ct_tr
+        self.t_ct_zfdip = t_ct_opt @ t_opt_zfdip
+        self.t_ct_daumcp = t_ct_opt @ t_opt_daumcp
+        self.t_ct_daudip = t_ct_opt @ t_opt_daudip
+        self.t_ct_ft = t_ct_opt @ t_opt_ft
+
+
+# %%
+if __name__ == '__main__':
+    tr = Tracker(0, './trackers/51k.csv')
+
+
+# %%
+
+
+def read_markerdata(path='./data/Take 2021-12-06 03.42.36 PM.csv', body_name='ZF DP', bodyt_markerf=True):
+    """read the data of the specific body from the csv file
+    -> get position for marker; -> get position + orientation for rigid body
+    """
+    with open(path, 'r') as file:
+        reader = csv.reader(file)
+
+        # skip headers
+        next(reader)  # Skip the first row (header)
+        next(reader)  # Skip the second row (empty row)
+
+        # data info
+        next(reader)  # marker types
+        body_names = next(reader)  # name of rigid bodies
+        id_names = next(reader)  # ids
+        next(reader)  # position / rotation info
+        next(reader)  # qx, qy, qz, qw, x, y, z -> info
+
+        if bodyt_markerf and body_name in body_names:
+            body_id = body_names.index(body_name)
+            print(body_id)
+        else:
+            print('Name not found!')
+            return
+
+        if bodyt_markerf == False and body_name in id_names:
+            body_id = body_names.index(id_names)
+        else:
+            print('ID not found!')
+            return
+
+        take_len = 7 if bodyt_markerf else 3
+
+        # add data to result
+        result = {
+            'pos': [],
+            'quat': [],
+        }
+
+        for row in reader:
+            cur_res = row[body_id:body_id+take_len]
+
+            if bodyt_markerf:
+                result['quat'].append(cur_res[:4])
+                result['pos'].append(cur_res[4:])
+            else:
+                result['pos'].append(cur_res)
+
+        return result
+
+
+res = read_markerdata()
+res['pos']
 # %%

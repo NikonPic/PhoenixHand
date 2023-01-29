@@ -242,3 +242,6 @@ plt.xlabel('time [s]', fontsize=14)
 plt.ylabel('angles index [°]', fontsize=14)
 plt.savefig('index_angles.png', dpi=300)
 # %%
+
+
+
