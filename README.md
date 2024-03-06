@@ -26,7 +26,7 @@ This study presents an innovative test rig engineered to explore the kinematic a
       <em>Figure 1: Overview of the autoencoder architecture for kinematics.</em>
     </td>
     <td>
-      <img src="./results/handtracking2.png" alt="Knee Joint Analysis" width="300"/>
+      <img src="./results/testsetup.png" alt="Knee Joint Analysis" width="300"/>
       <br>
       <em>Figure 2: Illustration of the test rig and setup.</em>
     </td>
