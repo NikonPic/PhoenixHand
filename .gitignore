@@ -1,7 +1,7 @@
-latest.json
-#pin*.json
-#*fre*.json
-
-data/test_october/*
-
-__pycache__
+outputs
+src/__pycache__
+src/trained_models
+videos/calib/*
+videos/hand*
+videos/knee*
+videos/training_progress

@@ -1,0 +1,169 @@
+# relevant measurement files
+# ----------------------------------------------------
+use_gym: false
+create_dataset: false
+create_video: true
+model_path: ./models/hand_2021
+mujoco_file: model.xml
+scene_file: scene.xml
+optitrack_file: ./measurement/21_12_06/Take 2021-12-06 03.42.36 PM.csv
+gym_file: ./measurement/21_12_06/pincer_highscore.json
+dataset_name: ./measurement/kinematic_dataset_21.npy
+
+# General Settings
+# ----------------------------------------------------
+gen:
+  off_xyz:
+    - 0.0
+    - 0.0
+    - 0.6
+  off_wxyz:
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+  marker_filt_threshold: 0.1
+  scale: 0.001
+  number_opt_iters: 5
+  use_thumb_marker: false
+  # video related:
+  dt: 0.01
+  fps: 100
+  start_pos: 100
+  end_pos: 105
+  videoname: ./videos/test9.mp4
+  calib_path: ./measurement/calibration
+
+# Thumb
+# ----------------------------------------------------
+# Tracker
+dau_dip:
+  mj_name: DAU_DIP
+  def_path: ./assets/trackers_old/dau dp.csv
+  ct_path: ./assets/infos2/DAU_DIP_TRACKER.mrk.json
+  stl_path: ./assets/meshes2/DAU_DIP.stl
+  csv_tracker_name: DAU DP
+  axis_path: ./assets/infos2/DAU_DIP_AXIS.mrk.json
+  idx: 1032
+  list_num: 2
+  resort: false
+  resort_list: [0, 1, 2]
+
+# Marker
+dau_pip:
+  mj_name: DAU_PIP
+  name: dau_pip
+  ct_path_axis_distal: ./assets/infos2/DAU_DIP_AXIS.mrk.json
+  ct_path_axis_proximal: ./assets/infos2/DAU_PIP_AXIS.mrk.json
+  ct_path_marker: ./assets/axis/DAU_PIP_MARKER.mrk.json
+  stl_path: ./assets/meshes2/DAU_PIP.stl
+  start_id: ./
+
+# Tracker
+dau_mcp:
+  mj_name: DAU_MCP
+  def_path: ./assets/trackers_old/dau mc.csv
+  ct_path: ./assets/infos2/DAU_MCP_TRACKER.mrk.json
+  stl_path: ./assets/meshes2/DAU_MCP.stl
+  csv_tracker_name: DAU MC
+  axis_path: ./assets/infos2/DAU_PIP_AXIS.mrk.json
+  idx: 1029
+  list_num: 3
+  resort: false
+  resort_list: [0, 1, 2]
+
+# Index Finger
+# ----------------------------------------------------
+# Tracker
+zf_dip:
+  mj_name: ZF_DIP
+  def_path: ./assets/trackers_old/zf_dp.csv
+  ct_path: ./assets/infos2/ZF_DIP_TRACKER.mrk.json
+  stl_path: ./assets/meshes2/ZF_DIP.stl
+  csv_tracker_name: ZF DP
+  axis_path: ./assets/infos2/ZF_DIP_AXIS.mrk.json
+  idx: 1028
+  list_num: 0
+  resort: false
+  resort_list: [0, 1, 2]
+
+# Marker
+zf_mid1:
+  mj_name: ZF_PIP1
+  name: zf_mid1
+  ct_path_axis_distal: ./assets/infos2/ZF_DIP_AXIS.mrk.json
+  ct_path_axis_proximal: ./assets/infos2/ZF_PIP_AXIS.mrk.json
+  ct_path_marker: ./assets/infos2/ZF_PIP_MARKER.mrk.json
+  stl_path: ./assets/meshes2/ZF_PIP.stl
+  start_id: ./
+
+# Marker
+zf_mid2:
+  mj_name: ZF_PIP2
+  name: zf_mid2
+  ct_path_axis_distal: ./assets/infos2/ZF_PIP_AXIS.mrk.json
+  ct_path_axis_proximal: ./assets/infos2/ZF_MCP_AXIS.mrk.json
+  ct_path_marker: ./
+  stl_path: ./assets/meshes2/ZF_MCP.stl
+  start_id: ./
+
+# Tracker
+zf_mcp:
+  mj_name: ZF_MCP
+  def_path: ./assets/trackers_old/zf_dp.csv
+  ct_path: ./assets/infos2/ZF_MCP_TRACKER.mrk.json
+  stl_path: ./assets/meshes2/ZF_MCP.stl
+  csv_tracker_name: ZF MC
+  axis_path: ./assets/infos2/ZF_MCP_AXIS.mrk.json
+  idx: 1031
+  list_num: 1
+  resort: false
+  resort_list: [0, 1, 2]
+# ----------------------------------------------------
+
+# Motor / Force Sensor Assignment:
+# ----------------------------------------------------
+motor_assign:
+  ED: 4
+  EI: 6
+  FDS: 3
+  FDP: 2
+  EPB: 7
+  EPL: 5
+  APL: 0
+  FPL: 1
+
+# Rigid Body Assignment:
+# ----------------------------------------------------
+body_assign:
+  zf_pp: 0
+  zf_dp: 1
+  daumen_dp: 2
+  daumen_mc: 3
+  force_torque: 4
+
+
+# AxisInfos # ToDo
+# ----------------------------------------------------
+axis_infos:
+  dau_cmc:
+    name: ZF_MCP_to_DAU_CMC
+    path: ./assets/joints/DAU_A_CMC.mrk.json
+  dau_mcp:
+    name: DAU_CMC_to_DAU_MCP
+    path: ./assets/joints/DAU_A_MCP.mrk.json
+  dau_pip: 
+    name: DAU_MCP_to_DAU_PIP
+    path: ./assets/joints/DAU_A_PIP.mrk.json
+  dau_dip: 
+    name: DAU_PIP_to_DAU_DIP
+    path: ./assets/joints/DAU_A_DIP.mrk.json
+  zf_mcp: 
+    name: ZF_MCP_to_ZF_PIP2
+    path: ./assets/joints/ZF_A_MCP.mrk.json
+  zf_pip: 
+    name: ZF_PIP2_to_ZF_PIP1
+    path: ./assets/joints/ZF_A_PIP.mrk.json
+  zf_dip: 
+    name: ZF_PIP1_to_ZF_DIP
+    path: ./assets/joints/ZF_A_DIP.mrk.json

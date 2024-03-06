@@ -1,0 +1,57 @@
+<mujoco model="hand model">
+    <compiler angle="radian" />
+    <option integrator="RK4" />
+
+    <worldbody>
+
+        <body name="ZF_MCP" pos="0.1765304360741342 -0.006212724687087806 0.36246523321202795" quat="0.9493391655149379 0.2596204789151585 0.14900580594456567 -0.09565367500559206">
+
+
+            <body name="DAU_CMC" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0">
+
+
+                <joint name="ZF_MCP_to_DAU_CMC" axis="{{ZF_MCP_to_DAU_CMC.axis}}" limited="true" pos="{{ZF_MCP_to_DAU_CMC.pos}}" range="-4 4" type="hinge" />
+
+                <body name="DAU_MCP" pos="-0.0051996219024619565 -0.017297986154240306 0.012909056180496493" quat="0.9963707275955191 0.024422273740191274 0.04402933783707002 0.06863193969111356">
+
+                    <joint axis="{{DAU_CMC_to_DAU_MCP.axis}}" limited="true" name="DAU_CMC_to_DAU_MCP" pos="{{DAU_CMC_to_DAU_MCP.pos}}" range="-4 4" type="hinge" armature="0.001" />
+
+                    <body name="DAU_PIP" pos="-0.004148970988564202 0.001735805600735077 -0.004146285024367472" quat="0.9982758293388541 0.009285212244582869 -0.04837647336581254 -0.03191974649152252">
+
+
+                        <joint name="DAU_MCP_to_DAU_PIP" axis="{{DAU_MCP_to_DAU_PIP.axis}}" limited="true" pos="{{DAU_MCP_to_DAU_PIP.pos}}" range="-4 4" type="hinge" />
+
+                        <body name="DAU_DIP" pos="-0.00433924131526193 -0.0003637396778127311 -0.0020970245100165245" quat="0.9744341224117706 0.06503579821584744 -0.18094432561059517 -0.11622236041036497">
+
+                            <joint name="DAU_PIP_to_DAU_DIP" axis="{{DAU_PIP_to_DAU_DIP.axis}}" limited="true" pos="{{DAU_PIP_to_DAU_DIP.pos}}" range="-4 4" type="hinge" />
+
+                            <body name="DAU_TIP" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" />
+
+                        </body>
+                    </body>
+                </body>
+            </body>
+
+
+            <body name="ZF_PIP2" pos="-0.04408808485454151 0.029136911946269977 -0.06062695362072164" quat="0.9849495052526392 -0.11495860271314842 -0.12714793269015798 0.02218997470572589">
+
+
+                <joint name="ZF_MCP_to_ZF_PIP2" axis="{{ZF_MCP_to_ZF_PIP2.axis}}" limited="true" pos="{{ZF_MCP_to_ZF_PIP2.pos}}" range="-4 4" type="hinge" />
+
+                <body name="ZF_PIP1" pos="0.03674525175643409 -0.10101967260373558 0.09061853552879026" quat="0.9541882720651348 0.2689936670135175 0.12690393235707081 0.03259663345018418">
+
+
+                    <joint name="ZF_PIP2_to_ZF_PIP1" axis="{{ZF_PIP2_to_ZF_PIP1.axis}}" limited="true" pos="{{ZF_PIP2_to_ZF_PIP1.pos}}" range="-4 4" type="hinge" />
+
+                    <body name="ZF_DIP" pos="-0.006489833313809016 -0.016887511265440566 0.023041259917669664" quat="0.9983028291442446 0.052609884024385385 0.010451067252851741 0.022681195268635695">
+
+
+                        <joint name="ZF_PIP1_to_ZF_DIP" axis="{{ZF_PIP1_to_ZF_DIP.axis}}" limited="true" pos="{{ZF_PIP1_to_ZF_DIP.pos}}" range="-4 4" type="hinge" />
+
+                        <body name="ZF_TIP" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" />
+                    </body>
+                </body>
+            </body>
+        </body>
+    </worldbody>
+</mujoco>

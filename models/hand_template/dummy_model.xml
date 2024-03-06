@@ -1,0 +1,47 @@
+<mujoco model="hand model">
+    <default class="zf">
+        <geom type="mesh" contype="3" conaffinity="2" group="0" friction="0.7" solref="0.015 1"
+            solimp="0.95 0.99 0.003" rgba="0.78 0.64 0.57 0.9" />
+    </default>
+    <compiler angle="radian" meshdir="../../assets/meshes" texturedir="assets" />
+    <asset>
+        <mesh file="Segmentation_ZF_DIP.stl" name="ZF-DIP" scale="0.001 0.001 0.001" />
+        <mesh file="Segmentation_ZF_PIP.stl" name="ZF-PIP1" scale="0.001 0.001 0.001" />
+        <mesh file="zf_mid2.stl" name="ZF-PIP2" scale="0.001 0.001 0.001" />
+        <mesh file="zf_mcp.stl" name="ZF-MCP" scale="0.001 0.001 0.001" />
+        <mesh file="Segmentation_DAU_Osmetacarpale_1.stl" name="DAU-MCP" scale="0.001 0.001 0.001" />
+        <mesh file="Segmentation_DAU_Phalax_proximalis.stl" name="DAU-PIP" scale="0.001 0.001 0.001" />
+        <mesh file="Segmentation_DAU_DIP.stl" name="DAU-DIP" scale="0.001 0.001 0.001" />
+        <mesh file="backhand.stl" name="BASE" scale="0.001 0.001 0.001" />
+        <mesh file="rest.stl" name="OTHER" scale="0.001 0.001 0.001" />
+    </asset>
+
+    <compiler angle="radian" />
+    <option integrator="RK4" />
+
+    <worldbody>
+
+
+        <body name="b1" pos="0.1 -0.2 0.3" quat="1 0.0 0.0 0.0">
+            <geom class="zf" mesh="ZF-MCP" type="mesh" />
+
+            <body name="b2" pos="-0.1 -2 0.1" quat="1 0.2588 1 0.0000">
+
+                <geom class="zf" mesh="ZF-MCP" type="mesh" />
+
+                <body name="b3" pos="-0.1 -0.1 0.1" quat="1 1 1 0.0000">
+
+
+
+                <body name="tip" pos="0.0 0.0 1.0" quat="1.0 0.0 0.0 0.0"/>
+                    <geom class="zf" mesh="ZF-MCP" type="mesh" />
+
+                    <joint name="ZF_PIP1_to_ZF_DIP" axis="0.8 0.4 0.3" limited="true"
+                    pos="0.05 -0.21 -0.11" range="-4 4" type="hinge" />
+                </body>
+            </body>
+        </body>
+
+
+    </worldbody>
+</mujoco>

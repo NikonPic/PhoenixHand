@@ -1,0 +1,200 @@
+# relevant measurement files
+# ----------------------------------------------------
+use_gym: true
+create_dataset: true
+create_relative: false
+create_video: false
+model_path: ./models/hand_model_connected
+mujoco_file: model.xml
+mujoco_copy_file: hand_simple.xml
+scene_file: scene.xml
+optitrack_file: ./measurement/23_01_31/Take 2023-01-31 06.11.42 PM.csv
+gym_file: ./measurement/23_01_31/2023_01_31_17_52_17.json
+dataset_name: ./measurement/kinematic_dataset.npy
+dataset_dict_name: ./measurement/kinematic_dataset_dict.npy
+tendon_path: ./assets/tendons
+joint_store_file: params_init.yaml
+
+# General Settings
+# ----------------------------------------------------
+gen:
+  off_xyz:
+    - 0.0
+    - 0.0
+    - 0.2
+  off_wxyz:
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+  marker_filt_threshold: 0.1
+  scale: 0.001
+  number_opt_iters: 5
+  use_thumb_marker: false
+  # video related:
+  dt: 0.01
+  fps: 100
+  start_pos: 0
+  end_pos: 5000
+  videoname: ./videos/test12.mp4
+  calib_path: ./measurement/calibration
+# Thumb
+# ----------------------------------------------------
+# Tracker
+dau_dip:
+  mj_name: DAU_DIP
+  def_path: ./assets/trackers_def/DAU_DIP.csv
+  ct_path: ./assets/trackers_ct/DAU_DIP.json
+  stl_path: ./assets/meshes/Segmentation_DAU_DIP.stl
+  csv_tracker_name: M4_klein
+  axis_path: ./assets/axis/DAU_DIP_AXIS.mrk.json
+  idx: 1032
+  list_num: 2
+  resort: true
+  resort_list: [0, 1]
+  point_list: [
+    FPL-1, EPL-1,
+  ]
+
+# Marker
+dau_pip:
+  mj_name: DAU_PIP
+  name: dau_pip
+  ct_path_axis_distal: ./assets/axis/DAU_DIP_AXIS.mrk.json
+  ct_path_axis_proximal: ./assets/axis/DAU_PIP_AXIS.mrk.json
+  ct_path_marker: ./assets/axis/DAU_PIP_MARKER.mrk.json
+  stl_path: ./assets/meshes/Segmentation_DAU_Phalax_proximalis.stl
+  start_id: Unlabeled 2023
+  point_list: [
+    EPL-2, EPL-3, EPB-1, FPL-2, FPL-3,
+  ]
+
+# Tracker
+dau_mcp:
+  mj_name: DAU_MCP
+  def_path: ./assets/trackers_def/DAU_MCP.csv
+  ct_path: ./assets/trackers_ct/DAU_MCP.json
+  stl_path: ./assets/meshes/Segmentation_DAU_Phalax_proximalis.stl
+  csv_tracker_name: Tracker 53
+  axis_path: ./assets/axis/DAU_PIP_AXIS.mrk.json
+  idx: 1029
+  list_num: 3
+  resort: true
+  resort_list: [0, 1]
+  point_list: [
+    EPB-2, EPB-3, FPL-4, APL-1,
+  ]
+
+# Index Finger
+# ----------------------------------------------------
+# Tracker
+zf_dip:
+  mj_name: ZF_DIP
+  def_path: ./assets/trackers_def/ZF_DIP.csv
+  ct_path: ./assets/trackers_ct/ZF_DIP.json
+  stl_path: ./assets/meshes/Segmentation_ZF_DIP.stl
+  csv_tracker_name: "55"
+  axis_path: ./assets/joints/ZF_A_DIP.mrk.json
+  idx: 1028
+  list_num: 0
+  resort: true
+  resort_list: [0, 1]
+  point_list: [
+    ED-1, FDP-1,
+  ]
+
+# Marker
+zf_mid1:
+  mj_name: ZF_PIP1
+  name: zf_mid1
+  ct_path_axis_distal: ./assets/joints/ZF_A_DIP.mrk.json
+  ct_path_axis_proximal: ./assets/joints/ZF_A_PIP.mrk.json
+  ct_path_marker: ./assets/axis/ZF_PIP_MARKER.mrk.json
+  stl_path: ./assets/meshes/Segmentation_ZF_PIP.stl
+  start_id: Unlabeled 2016
+  point_list: [
+    ED-2, ED-3, FDP-2, FDP-3, EI-1, FDS-1,
+  ]
+
+# Marker
+zf_mid2:
+  mj_name: ZF_PIP2
+  name: zf_mid2
+  ct_path_axis_distal: ./assets/joints/ZF_A_PIP.mrk.json
+  ct_path_axis_proximal: ./assets/joints/ZF_A_MCP.mrk.json
+  ct_path_marker: ./
+  stl_path: ./assets/meshes/Segmentation_ZF_MCP.stl
+  start_id: ./
+  point_list: [
+    ED-4, ED-5, EI-2, EI-3, FDS-2, FDS-3, FDP-4, FDP-5,
+  ]
+
+# Tracker
+zf_mcp:
+  mj_name: ZF_MCP
+  def_path: ./assets/trackers_def/ZF_MCP.csv
+  ct_path: ./assets/trackers_ct/ZF_MCP.json
+  stl_path: ./assets/meshes/Segmentation_ZF_Mittelhand.stl
+  csv_tracker_name: M4_gross
+  axis_path: ./assets/joints/ZF_A_MCP.mrk.json
+  idx: 1031
+  list_num: 1
+  resort: true
+  resort_list: [0, 1]
+  point_list: [
+    ED-6, ED-7, ED-8,
+    EI-4, EI-5, EI-6,
+    FDS-4, FDS-5,
+    FDP-6, FDP-7, FDP-8,
+    EPB-4,
+    EPL-4, EPL-5,
+    APL-2,
+    FPL-5, FPL-6,
+  ]
+# ----------------------------------------------------
+
+# Motor / Force Sensor Assignment:
+# ----------------------------------------------------
+motor_assign:
+  ED: 4
+  EI: 6
+  FDS: 3
+  FDP: 2
+  EPB: 7
+  EPL: 5
+  APL: 0
+  FPL: 1
+
+# Rigid Body Assignment:
+# ----------------------------------------------------
+body_assign:
+  zf_pp: 1
+  zf_dp: 0
+  daumen_dp: 2
+  daumen_mc: 3
+  force_torque: 4
+
+# AxisInfos
+# ----------------------------------------------------
+axis_infos:
+  dau_cmc:
+    name: ZF_MCP_to_DAU_CMC
+    path: ./assets/joints/DAU_A_CMC.mrk.json
+  dau_mcp:
+    name: DAU_CMC_to_DAU_MCP
+    path: ./assets/joints/DAU_A_MCP.mrk.json
+  dau_pip: 
+    name: DAU_MCP_to_DAU_PIP
+    path: ./assets/joints/DAU_A_PIP.mrk.json
+  dau_dip: 
+    name: DAU_PIP_to_DAU_DIP
+    path: ./assets/joints/DAU_A_DIP.mrk.json
+  zf_mcp: 
+    name: ZF_MCP_to_ZF_PIP2
+    path: ./assets/joints/ZF_A_MCP.mrk.json
+  zf_pip: 
+    name: ZF_PIP2_to_ZF_PIP1
+    path: ./assets/joints/ZF_A_PIP.mrk.json
+  zf_dip: 
+    name: ZF_PIP1_to_ZF_DIP
+    path: ./assets/joints/ZF_A_DIP.mrk.json
